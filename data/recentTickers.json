@@ -1,0 +1,34 @@
+{
+  "tickers": [
+    {
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "lastUsedAt": null
+    },
+    {
+      "symbol": "MSFT",
+      "name": "Microsoft Corporation",
+      "lastUsedAt": null
+    },
+    {
+      "symbol": "NVDA",
+      "name": "NVIDIA Corp.",
+      "lastUsedAt": null
+    },
+    {
+      "symbol": "TSLA",
+      "name": "Tesla, Inc.",
+      "lastUsedAt": null
+    },
+    {
+      "symbol": "SPY",
+      "name": "S&P 500 ETF",
+      "lastUsedAt": null
+    },
+    {
+      "symbol": "QQQ",
+      "name": "Nasdaq 100 ETF",
+      "lastUsedAt": null
+    }
+  ]
+}

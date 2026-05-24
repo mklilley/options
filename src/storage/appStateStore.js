@@ -1,0 +1,91 @@
+const path = require("node:path");
+const { z } = require("zod");
+const { JsonStore } = require("./jsonStore");
+const { nowIso } = require("../utils/dates");
+
+const FlowSchema = z.object({
+  type: z.string().min(1),
+  step: z.string().min(1),
+  data: z.record(z.any()).default({}),
+  updatedAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)))
+}).passthrough();
+
+const AppStateSchema = z.object({
+  version: z.literal(1),
+  activeFlow: FlowSchema.nullable(),
+  lastCheckStartedAt: z.string().nullable(),
+  lastCheckFinishedAt: z.string().nullable(),
+  lastCheckStatus: z.string().nullable()
+}).strict();
+
+const DEFAULT_APP_STATE = {
+  version: 1,
+  activeFlow: null,
+  lastCheckStartedAt: null,
+  lastCheckFinishedAt: null,
+  lastCheckStatus: null
+};
+
+class AppStateStore {
+  constructor({ dataDir, logger }) {
+    this.store = new JsonStore({
+      filePath: path.join(dataDir, "appState.json"),
+      schema: AppStateSchema,
+      defaultData: DEFAULT_APP_STATE,
+      logger
+    });
+  }
+
+  async init() {
+    await this.store.init();
+  }
+
+  async get() {
+    return this.store.read();
+  }
+
+  async getFlow() {
+    const state = await this.get();
+    return state.activeFlow;
+  }
+
+  async setFlow(flow) {
+    const nextFlow = flow
+      ? { ...flow, data: flow.data || {}, updatedAt: nowIso() }
+      : null;
+
+    await this.store.update((state) => {
+      state.activeFlow = nextFlow;
+      return state;
+    });
+    return nextFlow;
+  }
+
+  async clearFlow() {
+    await this.setFlow(null);
+  }
+
+  async setCheckStarted() {
+    const startedAt = nowIso();
+    await this.store.update((state) => {
+      state.lastCheckStartedAt = startedAt;
+      state.lastCheckStatus = "running";
+      return state;
+    });
+    return startedAt;
+  }
+
+  async setCheckFinished(status) {
+    const finishedAt = nowIso();
+    await this.store.update((state) => {
+      state.lastCheckFinishedAt = finishedAt;
+      state.lastCheckStatus = status;
+      return state;
+    });
+    return finishedAt;
+  }
+}
+
+module.exports = {
+  AppStateStore
+};
