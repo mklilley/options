@@ -18,7 +18,7 @@ function createBot({ config, alertStore, recentTickerStore, appStateStore, massi
     if (!fromId || !config.telegramAllowedUserIdSet.has(fromId)) {
       logger.warn({ fromId }, "Rejected non-allowlisted Telegram user");
       const message = fromId
-        ? `Sorry, you are not approved to use this bot.\n\nYour Telegram user ID is ${fromId}. Ask the bot owner to add it to TELEGRAM_ALLOWED_USER_IDS if you should have access.`
+        ? "You are not approved to use this bot yet.\n\nCopy the Telegram user ID in the next message and send it to the admin to request access."
         : "Sorry, you are not approved to use this bot. I could not read your Telegram user ID from this update.";
 
       if (ctx.callbackQuery) {
@@ -27,8 +27,15 @@ function createBot({ config, alertStore, recentTickerStore, appStateStore, massi
         } catch {
           // Ignore rejected-user Telegram errors.
         }
+        if (ctx.chat && fromId) {
+          await ctx.reply(message);
+          await ctx.reply(fromId);
+        }
       } else if (ctx.message) {
         await ctx.reply(message);
+        if (fromId) {
+          await ctx.reply(fromId);
+        }
       }
       return;
     }

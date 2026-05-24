@@ -12,6 +12,10 @@ async function main() {
   const logger = createLogger();
   const config = loadConfig();
 
+  if (config.telegramAllowedUserIds.length === 0) {
+    logger.warn("TELEGRAM_ALLOWED_USER_IDS is empty; the bot will start but reject every Telegram user and show their user id");
+  }
+
   const alertStore = new AlertStore({ dataDir: config.dataDir, logger });
   const recentTickerStore = new RecentTickerStore({ dataDir: config.dataDir, logger });
   const appStateStore = new AppStateStore({ dataDir: config.dataDir, logger });

@@ -26,6 +26,8 @@ This app intentionally does not use a database. It stores alerts and small bits 
 
 Only user ids in `TELEGRAM_ALLOWED_USER_IDS` can use this bot. Unknown users are politely rejected and shown their Telegram user id so you can add them if needed.
 
+You can leave `TELEGRAM_ALLOWED_USER_IDS` blank on the first run. The bot will start, reject everyone, and show each rejected user's Telegram user id.
+
 Each approved user should message the bot directly in a private chat. Alerts are sent back to the private chat where that user created the alert.
 
 ## Environment
@@ -54,6 +56,8 @@ STALE_TRADE_MAX_MINUTES=30
 ```sh
 TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
 ```
+
+Leave it blank temporarily if you need users to message the bot first so you can see their Telegram user ids.
 
 `TELEGRAM_ADMIN_USER_ID` is optional and reserved for future admin-only commands. Core alert functionality works for every allowed user.
 

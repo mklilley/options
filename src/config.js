@@ -26,7 +26,7 @@ function optionalTelegramId() {
 
 const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
-  TELEGRAM_ALLOWED_USER_IDS: z.string().min(1, "TELEGRAM_ALLOWED_USER_IDS is required"),
+  TELEGRAM_ALLOWED_USER_IDS: z.string().default(""),
   TELEGRAM_ADMIN_USER_ID: optionalTelegramId(),
   MASSIVE_API_KEY: z.string().min(1, "MASSIVE_API_KEY is required"),
   POLL_INTERVAL_MINUTES: optionalNumber(15),
@@ -57,12 +57,7 @@ function parseAllowedUserIds(value) {
     throw new Error(`TELEGRAM_ALLOWED_USER_IDS contains invalid Telegram user id(s): ${invalidIds.join(", ")}`);
   }
 
-  const uniqueIds = Array.from(new Set(ids));
-  if (uniqueIds.length === 0) {
-    throw new Error("TELEGRAM_ALLOWED_USER_IDS must contain at least one Telegram user id");
-  }
-
-  return uniqueIds;
+  return Array.from(new Set(ids));
 }
 
 function loadConfig() {
