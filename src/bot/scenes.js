@@ -40,6 +40,26 @@ class BotScenes {
     this.logger = logger;
   }
 
+  telegramUserId(ctx) {
+    return String(ctx.from.id);
+  }
+
+  chatId(ctx) {
+    return String(ctx.chat.id);
+  }
+
+  async getFlow(ctx) {
+    return this.appStateStore.getFlow(this.telegramUserId(ctx));
+  }
+
+  async setFlow(ctx, flow) {
+    return this.appStateStore.setFlow(this.telegramUserId(ctx), flow);
+  }
+
+  async clearFlow(ctx) {
+    return this.appStateStore.clearFlow(this.telegramUserId(ctx));
+  }
+
   async showWelcome(ctx) {
     await this.respond(ctx, formatWelcome(), mainMenuKeyboard());
   }
@@ -49,7 +69,7 @@ class BotScenes {
   }
 
   async cancel(ctx) {
-    await this.appStateStore.clearFlow();
+    await this.clearFlow(ctx);
     await this.respond(ctx, "Cancelled.", mainMenuKeyboard());
   }
 
@@ -59,7 +79,7 @@ class BotScenes {
 
   async listAlerts(ctx) {
     await this.answerCallback(ctx);
-    const alerts = await this.alertStore.list();
+    const alerts = await this.alertStore.listForUser(this.telegramUserId(ctx));
 
     if (alerts.length === 0) {
       await ctx.reply("No alerts yet. Use /new to create one.", mainMenuKeyboard());
@@ -74,13 +94,16 @@ class BotScenes {
 
   async runManualCheck(ctx) {
     await this.answerCallback(ctx, "Checking alerts...");
-    const result = await this.alertEngine.checkAll({ manual: true });
+    const result = await this.alertEngine.checkAll({
+      manual: true,
+      telegramUserId: this.telegramUserId(ctx)
+    });
     await ctx.reply(result.summaryText || "Check finished.");
   }
 
   async handleText(ctx) {
     const text = ctx.message && ctx.message.text ? ctx.message.text.trim() : "";
-    const flow = await this.appStateStore.getFlow();
+    const flow = await this.getFlow(ctx);
 
     if (!flow) {
       await ctx.reply("No active setup. Use /new to create an alert.", mainMenuKeyboard());
@@ -97,7 +120,7 @@ class BotScenes {
       return;
     }
 
-    await this.appStateStore.clearFlow();
+    await this.clearFlow(ctx);
     await ctx.reply("That saved flow is not recognized. Start again with /new.", mainMenuKeyboard());
   }
 
@@ -148,7 +171,7 @@ class BotScenes {
       return;
     }
 
-    const flow = await this.appStateStore.getFlow();
+    const flow = await this.getFlow(ctx);
     const flowData = flow && flow.type === "new_alert" ? flow.data : {};
 
     if (data === "new:back") {
@@ -240,19 +263,19 @@ class BotScenes {
     }
 
     if (action === "pause") {
-      const updated = await this.alertStore.updateAlert(id, (alert) => ({ ...alert, active: false }));
+      const updated = await this.alertStore.updateAlertForUser(id, this.telegramUserId(ctx), (alert) => ({ ...alert, active: false }));
       await this.renderUpdatedAlert(ctx, updated, "Alert paused.");
       return;
     }
 
     if (action === "resume") {
-      const updated = await this.alertStore.updateAlert(id, (alert) => ({ ...alert, active: true, triggerState: "armed" }));
+      const updated = await this.alertStore.updateAlertForUser(id, this.telegramUserId(ctx), (alert) => ({ ...alert, active: true, triggerState: "armed" }));
       await this.renderUpdatedAlert(ctx, updated, "Alert resumed.");
       return;
     }
 
     if (action === "del") {
-      const alert = await this.alertStore.getById(id);
+      const alert = await this.alertStore.getByIdForUser(id, this.telegramUserId(ctx));
       if (!alert) {
         await this.respond(ctx, "Alert not found.", mainMenuKeyboard());
         return;
@@ -262,42 +285,46 @@ class BotScenes {
     }
 
     if (action === "delno") {
-      const alert = await this.alertStore.getById(id);
+      const alert = await this.alertStore.getByIdForUser(id, this.telegramUserId(ctx));
       await this.renderUpdatedAlert(ctx, alert, "Kept alert.");
       return;
     }
 
     if (action === "delok") {
-      const removed = await this.alertStore.remove(id);
+      const removed = await this.alertStore.removeForUser(id, this.telegramUserId(ctx));
       await this.respond(ctx, removed ? "Deleted alert." : "Alert not found.", mainMenuKeyboard());
       return;
     }
 
     if (action === "entry") {
-      const alert = await this.alertStore.getById(id);
+      const alert = await this.alertStore.getByIdForUser(id, this.telegramUserId(ctx));
       if (!alert) {
         await this.respond(ctx, "Alert not found.", mainMenuKeyboard());
         return;
       }
-      await this.appStateStore.setFlow({ type: "edit_alert", step: "entry_price", data: { alertId: id } });
+      await this.setFlow(ctx, { type: "edit_alert", step: "entry_price", data: { alertId: id } });
       await this.respond(ctx, `Send the new entry price for:\n\n${formatAlertCompact(alert)}\n\nUse /cancel to cancel.`);
       return;
     }
 
     if (action === "th") {
-      const alert = await this.alertStore.getById(id);
+      const alert = await this.alertStore.getByIdForUser(id, this.telegramUserId(ctx));
       if (!alert) {
         await this.respond(ctx, "Alert not found.", mainMenuKeyboard());
         return;
       }
-      await this.appStateStore.setFlow({ type: "edit_alert", step: "threshold", data: { alertId: id } });
+      await this.setFlow(ctx, { type: "edit_alert", step: "threshold", data: { alertId: id } });
       await this.respond(ctx, `Send the new threshold for:\n\n${formatAlertCompact(alert)}\n\nUse /cancel to cancel.`);
       return;
     }
 
     if (action === "check") {
       await this.answerCallback(ctx, "Checking alert...");
-      const result = await this.alertEngine.checkAll({ manual: true, alertId: id });
+      const result = await this.alertEngine.checkAll({
+        manual: true,
+        alertId: id,
+        telegramUserId: this.telegramUserId(ctx)
+      });
       await ctx.reply(result.summaryText || "Check finished.");
       return;
     }
@@ -306,9 +333,9 @@ class BotScenes {
   }
 
   async handleEditText(ctx, flow, text) {
-    const alert = await this.alertStore.getById(flow.data.alertId);
+    const alert = await this.alertStore.getByIdForUser(flow.data.alertId, this.telegramUserId(ctx));
     if (!alert) {
-      await this.appStateStore.clearFlow();
+      await this.clearFlow(ctx);
       await ctx.reply("Alert not found. Edit cancelled.", mainMenuKeyboard());
       return;
     }
@@ -320,13 +347,13 @@ class BotScenes {
         return;
       }
 
-      const updated = await this.alertStore.updateAlert(alert.id, (current) => ({
+      const updated = await this.alertStore.updateAlertForUser(alert.id, this.telegramUserId(ctx), (current) => ({
         ...current,
         entryPrice,
         triggerState: "armed",
         lastTriggeredAt: null
       }));
-      await this.appStateStore.clearFlow();
+      await this.clearFlow(ctx);
       await ctx.reply(`Entry price updated.\n\n${formatAlertCompact(updated)}`, alertActionsKeyboard(updated));
       return;
     }
@@ -338,7 +365,7 @@ class BotScenes {
         return;
       }
 
-      const updated = await this.alertStore.updateAlert(alert.id, (current) => ({
+      const updated = await this.alertStore.updateAlertForUser(alert.id, this.telegramUserId(ctx), (current) => ({
         ...current,
         condition: {
           ...current.condition,
@@ -347,12 +374,12 @@ class BotScenes {
         triggerState: "armed",
         lastTriggeredAt: null
       }));
-      await this.appStateStore.clearFlow();
+      await this.clearFlow(ctx);
       await ctx.reply(`Threshold updated.\n\n${formatAlertCompact(updated)}`, alertActionsKeyboard(updated));
       return;
     }
 
-    await this.appStateStore.clearFlow();
+    await this.clearFlow(ctx);
     await ctx.reply("Edit cancelled because the saved edit step was not recognized.", mainMenuKeyboard());
   }
 
@@ -377,12 +404,12 @@ class BotScenes {
 
   async renderTickerStep(ctx, data) {
     const tickers = await this.recentTickerStore.list();
-    await this.appStateStore.setFlow({ type: "new_alert", step: "ticker", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "ticker", data });
     await this.respond(ctx, "Choose a ticker or type one manually.", tickerKeyboard(tickers));
   }
 
   async renderOptionTypeStep(ctx, data) {
-    await this.appStateStore.setFlow({ type: "new_alert", step: "contract_type", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "contract_type", data });
     await this.respond(ctx, `Select option type for ${data.underlyingSymbol}.`, optionTypeKeyboard());
   }
 
@@ -406,7 +433,7 @@ class BotScenes {
     }
 
     const nextData = { ...data, expirations, expiryPage: Number(data.expiryPage) || 0 };
-    await this.appStateStore.setFlow({ type: "new_alert", step: "expiry", data: nextData });
+    await this.setFlow(ctx, { type: "new_alert", step: "expiry", data: nextData });
 
     if (expirations.length === 0) {
       await this.respond(ctx, `No active ${data.contractType} expiries found for ${data.underlyingSymbol}.`, optionTypeKeyboard());
@@ -448,7 +475,7 @@ class BotScenes {
       underlyingPriceHint,
       strikePage: Number(data.strikePage) || 0
     };
-    await this.appStateStore.setFlow({ type: "new_alert", step: "strike", data: nextData });
+    await this.setFlow(ctx, { type: "new_alert", step: "strike", data: nextData });
 
     if (strikes.length === 0) {
       await this.respond(ctx, `No strikes found for ${data.underlyingSymbol} ${data.expirationDate}.`, expirationKeyboard(data.expirations || [], data.expiryPage || 0));
@@ -492,7 +519,7 @@ class BotScenes {
 
     if (contracts.length > 1) {
       const nextData = { ...data, contractChoices: contracts };
-      await this.appStateStore.setFlow({ type: "new_alert", step: "disambiguate", data: nextData });
+      await this.setFlow(ctx, { type: "new_alert", step: "disambiguate", data: nextData });
       await this.respond(ctx, "More than one contract matched. Choose the exact contract.", disambiguationKeyboard(contracts));
       return;
     }
@@ -502,27 +529,27 @@ class BotScenes {
 
   async renderEntryPriceStep(ctx, data) {
     await this.recentTickerStore.touch(data.underlyingSymbol, data.underlyingName);
-    await this.appStateStore.setFlow({ type: "new_alert", step: "entry_price", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "entry_price", data });
     await this.respond(ctx, `Contract resolved:\n${data.optionContract}\n\nSend your option entry price.`, backCancelKeyboard());
   }
 
   async renderConditionKindStep(ctx, data) {
-    await this.appStateStore.setFlow({ type: "new_alert", step: "condition_kind", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "condition_kind", data });
     await this.respond(ctx, "Select alert type.", conditionKindKeyboard());
   }
 
   async renderDirectionStep(ctx, data) {
-    await this.appStateStore.setFlow({ type: "new_alert", step: "direction", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "direction", data });
     await this.respond(ctx, "Select alert direction.", directionKeyboard());
   }
 
   async renderThresholdStep(ctx, data) {
-    await this.appStateStore.setFlow({ type: "new_alert", step: "threshold", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "threshold", data });
     await this.respond(ctx, this.thresholdPrompt(data), backCancelKeyboard());
   }
 
   async renderConfirmStep(ctx, data) {
-    await this.appStateStore.setFlow({ type: "new_alert", step: "confirm", data });
+    await this.setFlow(ctx, { type: "new_alert", step: "confirm", data });
     await this.respond(ctx, formatCreationSummary(data, this.config), confirmKeyboard());
   }
 
@@ -551,6 +578,8 @@ class BotScenes {
       createdAt: timestamp,
       updatedAt: timestamp,
       active: true,
+      telegramUserId: this.telegramUserId(ctx),
+      chatId: this.chatId(ctx),
       underlyingSymbol: data.underlyingSymbol,
       underlyingName: data.underlyingName,
       contractType: data.contractType,
@@ -574,7 +603,7 @@ class BotScenes {
 
     await this.alertStore.add(alert);
     await this.recentTickerStore.touch(alert.underlyingSymbol, alert.underlyingName);
-    await this.appStateStore.clearFlow();
+    await this.clearFlow(ctx);
 
     await this.respond(ctx, `Alert saved.\n\n${formatAlertCompact(alert)}`, checkNowKeyboard(alert.id));
   }
@@ -587,7 +616,7 @@ class BotScenes {
 
     const data = flow.data || {};
     if (flow.step === "ticker") {
-      await this.appStateStore.clearFlow();
+      await this.clearFlow(ctx);
       await this.respond(ctx, "Setup cancelled.", mainMenuKeyboard());
     } else if (flow.step === "contract_type") {
       await this.renderTickerStep(ctx, data);

@@ -12,7 +12,8 @@ const FlowSchema = z.object({
 
 const AppStateSchema = z.object({
   version: z.literal(1),
-  activeFlow: FlowSchema.nullable(),
+  activeFlow: FlowSchema.nullable().default(null),
+  activeFlows: z.record(FlowSchema).default({}),
   lastCheckStartedAt: z.string().nullable(),
   lastCheckFinishedAt: z.string().nullable(),
   lastCheckStatus: z.string().nullable()
@@ -21,6 +22,7 @@ const AppStateSchema = z.object({
 const DEFAULT_APP_STATE = {
   version: 1,
   activeFlow: null,
+  activeFlows: {},
   lastCheckStartedAt: null,
   lastCheckFinishedAt: null,
   lastCheckStatus: null
@@ -44,25 +46,37 @@ class AppStateStore {
     return this.store.read();
   }
 
-  async getFlow() {
+  async getFlow(telegramUserId) {
     const state = await this.get();
-    return state.activeFlow;
+    if (!telegramUserId) return state.activeFlow;
+    return state.activeFlows[String(telegramUserId)] || null;
   }
 
-  async setFlow(flow) {
+  async setFlow(telegramUserId, flow) {
+    if (flow === undefined) {
+      flow = telegramUserId;
+      telegramUserId = null;
+    }
+
     const nextFlow = flow
       ? { ...flow, data: flow.data || {}, updatedAt: nowIso() }
       : null;
 
     await this.store.update((state) => {
-      state.activeFlow = nextFlow;
+      if (!telegramUserId) {
+        state.activeFlow = nextFlow;
+      } else if (nextFlow) {
+        state.activeFlows[String(telegramUserId)] = nextFlow;
+      } else {
+        delete state.activeFlows[String(telegramUserId)];
+      }
       return state;
     });
     return nextFlow;
   }
 
-  async clearFlow() {
-    await this.setFlow(null);
+  async clearFlow(telegramUserId) {
+    await this.setFlow(telegramUserId || null, null);
   }
 
   async setCheckStarted() {

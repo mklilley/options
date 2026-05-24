@@ -17,10 +17,17 @@ function optionalString(defaultValue) {
   }, z.string().min(1));
 }
 
+function optionalTelegramId() {
+  return z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") return null;
+    return String(value);
+  }, z.string().regex(/^\d+$/, "must be a numeric Telegram user id").nullable());
+}
+
 const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
-  TELEGRAM_ADMIN_USER_ID: z.string().regex(/^\d+$/, "TELEGRAM_ADMIN_USER_ID must be a numeric Telegram user id"),
-  TELEGRAM_ADMIN_CHAT_ID: z.string().regex(/^-?\d+$/, "TELEGRAM_ADMIN_CHAT_ID must be a numeric Telegram chat id"),
+  TELEGRAM_ALLOWED_USER_IDS: z.string().min(1, "TELEGRAM_ALLOWED_USER_IDS is required"),
+  TELEGRAM_ADMIN_USER_ID: optionalTelegramId(),
   MASSIVE_API_KEY: z.string().min(1, "MASSIVE_API_KEY is required"),
   POLL_INTERVAL_MINUTES: optionalNumber(15),
   DATA_DIR: optionalString("./data"),
@@ -39,6 +46,25 @@ function normalizePriceBasis(value) {
   return "last_trade_with_mid_fallback";
 }
 
+function parseAllowedUserIds(value) {
+  const ids = String(value)
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  const invalidIds = ids.filter((id) => !/^\d+$/.test(id));
+  if (invalidIds.length > 0) {
+    throw new Error(`TELEGRAM_ALLOWED_USER_IDS contains invalid Telegram user id(s): ${invalidIds.join(", ")}`);
+  }
+
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) {
+    throw new Error("TELEGRAM_ALLOWED_USER_IDS must contain at least one Telegram user id");
+  }
+
+  return uniqueIds;
+}
+
 function loadConfig() {
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -48,11 +74,13 @@ function loadConfig() {
 
   const env = parsed.data;
   const dataDir = path.resolve(process.cwd(), env.DATA_DIR);
+  const telegramAllowedUserIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 
   return {
     telegramBotToken: env.TELEGRAM_BOT_TOKEN,
+    telegramAllowedUserIds,
+    telegramAllowedUserIdSet: new Set(telegramAllowedUserIds),
     telegramAdminUserId: env.TELEGRAM_ADMIN_USER_ID,
-    telegramAdminChatId: env.TELEGRAM_ADMIN_CHAT_ID,
     massiveApiKey: env.MASSIVE_API_KEY,
     pollIntervalMinutes: env.POLL_INTERVAL_MINUTES,
     dataDir,

@@ -34,8 +34,8 @@ async function main() {
     massiveClient,
     config,
     logger,
-    sendMessage: async (message) => {
-      await bot.telegram.sendMessage(config.telegramAdminChatId, message);
+    sendMessage: async (chatId, message) => {
+      await bot.telegram.sendMessage(chatId, message);
     }
   });
 

@@ -1,12 +1,13 @@
 # options-alert
 
-A simple single-user Telegram bot that watches option prices through the Massive.com API and sends alerts when saved thresholds are reached.
+A simple allowlisted Telegram bot that watches option prices through the Massive.com API and sends alerts when saved thresholds are reached.
 
 This app intentionally does not use a database. It stores alerts and small bits of state in JSON files under `data/`.
 
 ## What It Does
 
-- Lets one trusted Telegram user create option alerts.
+- Lets a small allowlist of trusted Telegram users create option alerts.
+- Stores each alert with the Telegram user id and private chat id that created it.
 - Discovers option expiries, strikes, and exact option contract tickers from Massive.com.
 - Stores the resolved option contract ticker and uses that exact ticker for monitoring.
 - Checks active alerts on a schedule, defaulting to every 15 minutes.
@@ -21,9 +22,11 @@ This app intentionally does not use a database. It stores alerts and small bits 
 2. Send `/newbot`.
 3. Follow the prompts and copy the bot token.
 4. Start a chat with your new bot.
-5. Get your Telegram user id and chat id. A quick way is to message `@userinfobot`, or log incoming updates during local testing.
+5. Get each approved Telegram user's user id. A quick way is to message `@userinfobot`, or have the user start the bot and read the id shown in the rejection message.
 
-Only the user id in `TELEGRAM_ADMIN_USER_ID` can use this bot. Other users are rejected.
+Only user ids in `TELEGRAM_ALLOWED_USER_IDS` can use this bot. Unknown users are politely rejected and shown their Telegram user id so you can add them if needed.
+
+Each approved user should message the bot directly in a private chat. Alerts are sent back to the private chat where that user created the alert.
 
 ## Environment
 
@@ -37,14 +40,22 @@ Fill in:
 
 ```sh
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_IDS=
 TELEGRAM_ADMIN_USER_ID=
-TELEGRAM_ADMIN_CHAT_ID=
 MASSIVE_API_KEY=
 POLL_INTERVAL_MINUTES=15
 DATA_DIR=./data
 DEFAULT_PRICE_BASIS=last_trade
 STALE_TRADE_MAX_MINUTES=30
 ```
+
+`TELEGRAM_ALLOWED_USER_IDS` is a comma-separated list, for example:
+
+```sh
+TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
+```
+
+`TELEGRAM_ADMIN_USER_ID` is optional and reserved for future admin-only commands. Core alert functionality works for every allowed user.
 
 `DEFAULT_PRICE_BASIS=last_trade` means latest trade is preferred, with bid/ask mid fallback when the trade is missing or stale.
 
@@ -113,7 +124,14 @@ Storage behavior:
 - A `.bak` copy is kept before overwriting existing JSON.
 - If a JSON file is corrupt, the app tries the `.bak`; if that fails, it preserves a `.corrupt-*` copy and recreates defaults.
 
-`appState.json` stores the current single-user setup/edit flow, so a restart during setup does not corrupt saved alerts.
+`appState.json` stores setup/edit flows per Telegram user, so a restart during setup does not corrupt saved alerts.
+
+Every new alert in `alerts.json` includes:
+
+- `telegramUserId`: the Telegram user who owns the alert
+- `chatId`: the private chat where alert messages should be sent
+
+Users can only list, edit, pause, resume, delete, and manually check their own alerts.
 
 ## Alert Evaluation
 

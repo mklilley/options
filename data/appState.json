@@ -1,6 +1,7 @@
 {
   "version": 1,
   "activeFlow": null,
+  "activeFlows": {},
   "lastCheckStartedAt": null,
   "lastCheckFinishedAt": null,
   "lastCheckStatus": null

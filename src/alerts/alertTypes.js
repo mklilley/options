@@ -27,6 +27,8 @@ const AlertSchema = z.object({
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
   active: z.boolean(),
+  telegramUserId: z.string().regex(/^\d+$/).nullable().default(null),
+  chatId: z.string().regex(/^-?\d+$/).nullable().default(null),
   underlyingSymbol: z.string().min(1),
   underlyingName: z.string().min(1),
   contractType: ContractTypeSchema,

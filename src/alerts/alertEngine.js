@@ -18,7 +18,7 @@ class AlertEngine {
   }
 
   async checkAll(options = {}) {
-    const { manual = false, alertId = null } = options;
+    const { manual = false, alertId = null, telegramUserId = null } = options;
 
     if (this.running) {
       return {
@@ -44,8 +44,14 @@ class AlertEngine {
     try {
       allAlerts = await this.alertStore.list();
       let alertsToCheck = alertId
-        ? allAlerts.filter((alert) => alert.id === alertId)
-        : allAlerts.filter((alert) => alert.active);
+        ? allAlerts.filter((alert) => (
+          alert.id === alertId &&
+          (!telegramUserId || alert.telegramUserId === String(telegramUserId))
+        ))
+        : allAlerts.filter((alert) => (
+          alert.active &&
+          (!telegramUserId || alert.telegramUserId === String(telegramUserId))
+        ));
 
       if (alertId && alertsToCheck.length === 0) {
         summaries.push({
@@ -112,7 +118,17 @@ class AlertEngine {
           changed = true;
 
           if (evaluation.shouldNotify) {
-            triggeredMessages.push(formatAlertTriggeredMessage(alert, selectedPrice, evaluation, snapshot, checkedAt));
+            if (alert.chatId) {
+              triggeredMessages.push({
+                chatId: alert.chatId,
+                message: formatAlertTriggeredMessage(alert, selectedPrice, evaluation, snapshot, checkedAt)
+              });
+            } else {
+              this.logger.error({
+                alertId: alert.id,
+                telegramUserId: alert.telegramUserId
+              }, "Alert triggered but has no chatId; cannot send Telegram message");
+            }
           }
 
           summaries.push({
@@ -149,11 +165,11 @@ class AlertEngine {
       this.running = false;
     }
 
-    for (const message of triggeredMessages) {
+    for (const triggeredMessage of triggeredMessages) {
       try {
-        await this.sendMessage(message);
+        await this.sendMessage(triggeredMessage.chatId, triggeredMessage.message);
       } catch (error) {
-        this.logger.error({ error }, "Failed to send Telegram alert message");
+        this.logger.error({ chatId: triggeredMessage.chatId, error }, "Failed to send Telegram alert message");
       }
     }
 

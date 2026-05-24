@@ -15,16 +15,34 @@ function createBot({ config, alertStore, recentTickerStore, appStateStore, massi
 
   bot.use(async (ctx, next) => {
     const fromId = ctx.from && ctx.from.id ? String(ctx.from.id) : null;
-    if (fromId !== config.telegramAdminUserId) {
-      logger.warn({ fromId }, "Rejected non-admin Telegram user");
+    if (!fromId || !config.telegramAllowedUserIdSet.has(fromId)) {
+      logger.warn({ fromId }, "Rejected non-allowlisted Telegram user");
+      const message = fromId
+        ? `Sorry, you are not approved to use this bot.\n\nYour Telegram user ID is ${fromId}. Ask the bot owner to add it to TELEGRAM_ALLOWED_USER_IDS if you should have access.`
+        : "Sorry, you are not approved to use this bot. I could not read your Telegram user ID from this update.";
+
       if (ctx.callbackQuery) {
         try {
-          await ctx.answerCbQuery("This bot is private.");
+          await ctx.answerCbQuery(fromId ? `Not approved. Your user ID: ${fromId}` : "Not approved.");
         } catch {
           // Ignore rejected-user Telegram errors.
         }
       } else if (ctx.message) {
-        await ctx.reply("Sorry, this bot is private.");
+        await ctx.reply(message);
+      }
+      return;
+    }
+
+    if (ctx.chat && ctx.chat.type !== "private") {
+      logger.warn({ fromId, chatId: ctx.chat.id, chatType: ctx.chat.type }, "Rejected non-private Telegram chat");
+      if (ctx.callbackQuery) {
+        try {
+          await ctx.answerCbQuery("Please use this bot in a private chat.");
+        } catch {
+          // Ignore private-chat enforcement Telegram errors.
+        }
+      } else if (ctx.message) {
+        await ctx.reply("Please message me in a private chat. Alerts are tied to each user's own private chat.");
       }
       return;
     }
