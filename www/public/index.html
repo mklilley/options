@@ -19,12 +19,19 @@
       <main class="workspace">
         <section class="panel controls-panel" aria-label="Option selector">
           <form id="historyForm">
-            <div class="field-row">
+            <div class="field-row ticker-row">
               <label class="field">
                 <span>Ticker</span>
                 <input id="underlyingSymbol" name="underlyingSymbol" value="TSLA" autocomplete="off" spellcheck="false">
               </label>
 
+              <div class="ticker-picks" aria-label="Common tickers">
+                <span>Tickers</span>
+                <div class="ticker-buttons" id="tickerQuickPicks"></div>
+              </div>
+            </div>
+
+            <div class="field-row option-row">
               <fieldset class="field option-type-field">
                 <legend>Type</legend>
                 <div class="segmented">
@@ -40,11 +47,6 @@
               </fieldset>
 
               <button type="button" id="loadExpiriesButton">Load expiries</button>
-            </div>
-
-            <div class="ticker-picks" aria-label="Common tickers">
-              <span>Tickers</span>
-              <div class="ticker-buttons" id="tickerQuickPicks"></div>
             </div>
 
             <div class="field-row">

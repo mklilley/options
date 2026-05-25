@@ -122,11 +122,24 @@ select {
   margin-bottom: 0;
 }
 
+.ticker-row {
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+}
+
+.option-row {
+  grid-template-columns: minmax(160px, 240px) minmax(140px, auto) minmax(0, 1fr);
+}
+
+.option-row #loadExpiriesButton {
+  justify-self: start;
+}
+
 .ticker-picks {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: -2px 0 12px;
+  min-height: 40px;
+  margin: 0;
 }
 
 .ticker-picks > span {
