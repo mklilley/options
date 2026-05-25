@@ -102,6 +102,48 @@ select {
   margin-bottom: 0;
 }
 
+.ticker-picks {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 12px;
+}
+
+.ticker-picks > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ticker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ticker-chip {
+  min-height: 32px;
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.ticker-chip:hover {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+  color: var(--accent-dark);
+}
+
+.ticker-chip.is-active {
+  border-color: #1f2924;
+  background: #1f2924;
+  color: #fff;
+}
+
 .field,
 .option-type-field {
   display: grid;
@@ -409,6 +451,11 @@ tbody tr:last-child td {
   .metrics-strip,
   .data-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ticker-picks {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .workspace {

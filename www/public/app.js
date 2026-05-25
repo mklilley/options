@@ -1,9 +1,22 @@
+const DEFAULT_TICKERS = [
+  { symbol: "AAPL", name: "Apple Inc." },
+  { symbol: "MSFT", name: "Microsoft Corporation" },
+  { symbol: "NVDA", name: "NVIDIA Corp." },
+  { symbol: "TSLA", name: "Tesla, Inc." },
+  { symbol: "SPY", name: "S&P 500 ETF" },
+  { symbol: "QQQ", name: "Nasdaq 100 ETF" }
+];
+
+const RECENT_TICKERS_KEY = "optionsHistoryRecentTickers";
+const MAX_TICKER_PICKS = 10;
+
 const state = {
   expirations: [],
   strikes: [],
   history: null,
   chartPoints: [],
-  hoverIndex: null
+  hoverIndex: null,
+  tickerPicks: buildTickerPicks()
 };
 
 const API_BASE = normalizeApiBase(window.OPTIONS_API_BASE || defaultApiBase());
@@ -20,6 +33,7 @@ const els = {
   timespan: document.querySelector("#timespan"),
   loadExpiriesButton: document.querySelector("#loadExpiriesButton"),
   loadHistoryButton: document.querySelector("#loadHistoryButton"),
+  tickerQuickPicks: document.querySelector("#tickerQuickPicks"),
   exportCsvLink: document.querySelector("#exportCsvLink"),
   chart: document.querySelector("#priceChart"),
   chartTitle: document.querySelector("#chartTitle"),
@@ -37,11 +51,18 @@ const els = {
 };
 
 setDefaultDates();
+renderTickerPicks();
 bindEvents();
 drawChart([]);
 
 function bindEvents() {
   els.loadExpiriesButton.addEventListener("click", loadExpirations);
+  els.underlyingSymbol.addEventListener("input", renderTickerPicks);
+  els.tickerQuickPicks.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-ticker]");
+    if (!button) return;
+    selectTicker(button.dataset.ticker);
+  });
   els.expirationDate.addEventListener("change", loadStrikes);
   els.strikeSelect.addEventListener("change", () => {
     if (els.strikeSelect.value) {
@@ -83,6 +104,7 @@ async function loadExpirations() {
     setStatus(state.expirations.length ? "Expiries loaded" : "No expiries found");
 
     if (state.expirations.length > 0) {
+      rememberTicker(underlyingSymbol);
       els.expirationDate.value = state.expirations[0];
       await loadStrikes();
     }
@@ -139,6 +161,7 @@ async function loadHistory() {
     updateSnapshot(data.snapshot);
     updateTable(data.bars || []);
     updateExport(params);
+    rememberTicker(params.underlyingSymbol);
     drawChart(state.chartPoints);
     setCacheStatus(data.cache && data.cache.history);
     setStatus(data.bars.length ? "History loaded" : "No bars returned");
@@ -450,10 +473,119 @@ function setCacheStatus(cache) {
   els.cacheStatus.textContent = cache.hit ? "Cache hit" : "Fresh fetch";
 }
 
+function selectTicker(symbol) {
+  const ticker = cleanTicker(symbol);
+  if (!ticker) return;
+
+  const changed = cleanTicker(els.underlyingSymbol.value) !== ticker;
+  els.underlyingSymbol.value = ticker;
+
+  if (changed) {
+    resetSelect(els.expirationDate, "Load expiries first");
+    resetSelect(els.strikeSelect, "Select expiry first");
+    els.strikePrice.value = "";
+    disableExport();
+  }
+
+  renderTickerPicks();
+  loadExpirations();
+}
+
+function renderTickerPicks() {
+  if (!els.tickerQuickPicks) return;
+
+  const activeTicker = cleanTicker(els.underlyingSymbol.value);
+  els.tickerQuickPicks.innerHTML = state.tickerPicks.map((ticker) => {
+    const isActive = ticker.symbol === activeTicker;
+    const title = ticker.name ? `${ticker.symbol} - ${ticker.name}` : ticker.symbol;
+    return `
+      <button
+        type="button"
+        class="ticker-chip${isActive ? " is-active" : ""}"
+        data-ticker="${escapeHtml(ticker.symbol)}"
+        title="${escapeHtml(title)}"
+      >${escapeHtml(ticker.symbol)}</button>
+    `;
+  }).join("");
+}
+
+function rememberTicker(symbol) {
+  const ticker = cleanTicker(symbol);
+  if (!isTickerLike(ticker)) return;
+
+  const recent = [
+    ticker,
+    ...loadRecentTickers().map((item) => item.symbol).filter((item) => item !== ticker)
+  ].slice(0, MAX_TICKER_PICKS);
+
+  try {
+    window.localStorage.setItem(RECENT_TICKERS_KEY, JSON.stringify(recent));
+  } catch (error) {
+    return;
+  }
+
+  state.tickerPicks = buildTickerPicks();
+  renderTickerPicks();
+}
+
+function buildTickerPicks() {
+  return mergeTickerLists(loadRecentTickers(), DEFAULT_TICKERS).slice(0, MAX_TICKER_PICKS);
+}
+
+function loadRecentTickers() {
+  let parsed;
+  try {
+    parsed = JSON.parse(window.localStorage.getItem(RECENT_TICKERS_KEY) || "[]");
+  } catch (error) {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .map((item) => {
+      if (typeof item === "string") return { symbol: cleanTicker(item), name: "" };
+      if (item && typeof item === "object") {
+        return {
+          symbol: cleanTicker(item.symbol),
+          name: typeof item.name === "string" ? item.name : ""
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && isTickerLike(item.symbol));
+}
+
+function mergeTickerLists(...lists) {
+  const seen = new Set();
+  const merged = [];
+
+  lists.flat().forEach((ticker) => {
+    const symbol = cleanTicker(ticker && ticker.symbol);
+    if (!isTickerLike(symbol) || seen.has(symbol)) return;
+    seen.add(symbol);
+    merged.push({
+      symbol,
+      name: typeof ticker.name === "string" ? ticker.name : ""
+    });
+  });
+
+  return merged;
+}
+
 function normalizedTicker() {
-  const value = els.underlyingSymbol.value.trim().toUpperCase();
+  const value = cleanTicker(els.underlyingSymbol.value);
   els.underlyingSymbol.value = value;
+  renderTickerPicks();
   return value;
+}
+
+function cleanTicker(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isTickerLike(value) {
+  return /^[A-Z][A-Z0-9.-]{0,14}$/.test(value);
 }
 
 function selectedContractType() {

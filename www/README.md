@@ -6,6 +6,8 @@ The app is separate from the Telegram bot. It runs a small Node.js server that s
 
 The `www/` folder is self-contained and can be moved into its own repo later.
 
+The ticker field includes quick-pick buttons for common symbols. Successfully loaded tickers are remembered in the browser so they appear first next time.
+
 ## Why REST API Plus Cache
 
 For this interactive workflow, REST is the best starting point:
