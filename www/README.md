@@ -69,6 +69,38 @@ http://localhost:3001/options/
 
 Do not deploy `www/public` by itself for the full app. The HTML may load, but the API routes need the Node server because Massive requests and caching happen server-side.
 
+## Run With pm2
+
+From this folder:
+
+```sh
+pm2 start src/server.js --name options-www
+pm2 save
+pm2 logs options-www
+```
+
+Restart after changing `.env`:
+
+```sh
+pm2 restart options-www --update-env
+```
+
+Stop and remove it:
+
+```sh
+pm2 stop options-www
+pm2 delete options-www
+pm2 save
+```
+
+For a subpath deployment, set `BASE_PATH` in `.env` before starting:
+
+```env
+HOST=127.0.0.1
+PORT=3003
+BASE_PATH=/options
+```
+
 ## Deploy Under A Subpath
 
 For a URL like:
