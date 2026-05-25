@@ -18,6 +18,12 @@
   box-sizing: border-box;
 }
 
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -35,6 +41,9 @@ select {
 
 .app-shell {
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .topbar {
@@ -46,6 +55,10 @@ select {
   background: #1f2924;
   color: #f8fbf7;
   border-bottom: 4px solid var(--accent);
+}
+
+.topbar > div {
+  min-width: 0;
 }
 
 .topbar h1 {
@@ -69,16 +82,22 @@ select {
   text-align: center;
   font-size: 13px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .workspace {
   display: grid;
   gap: 16px;
-  width: min(1440px, calc(100% - 32px));
+  width: min(1440px, 100%);
   margin: 16px auto 32px;
+  padding: 0 16px;
+  min-width: 0;
 }
 
 .panel {
+  min-width: 0;
+  max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -87,6 +106,7 @@ select {
 
 .controls-panel {
   padding: 16px;
+  overflow: hidden;
 }
 
 .field-row {
@@ -265,6 +285,7 @@ button:disabled,
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--line);
+  min-width: 0;
 }
 
 .metrics-strip > div {
@@ -291,6 +312,7 @@ button:disabled,
 .chart-panel {
   min-height: 440px;
   padding: 16px;
+  overflow: hidden;
 }
 
 .chart-header,
@@ -300,6 +322,12 @@ button:disabled,
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 12px;
+  min-width: 0;
+}
+
+.chart-header > div,
+.table-header > div {
+  min-width: 0;
 }
 
 h2 {
@@ -322,11 +350,14 @@ h2 {
 .chart-wrap {
   position: relative;
   min-height: 360px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 canvas {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: 360px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -351,11 +382,14 @@ canvas {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .snapshot-panel,
 .table-panel {
   padding: 16px;
+  min-width: 0;
 }
 
 dl {
@@ -393,9 +427,11 @@ dd {
 }
 
 .table-wrap {
+  max-width: 100%;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -459,6 +495,6 @@ tbody tr:last-child td {
   }
 
   .workspace {
-    width: min(100% - 20px, 1440px);
+    padding: 0 10px;
   }
 }
