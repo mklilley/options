@@ -35,6 +35,7 @@ function loadEnv() {
 
   const port = Number(process.env.PORT || 3001);
   const host = process.env.HOST || "127.0.0.1";
+  const basePath = normalizeBasePath(process.env.BASE_PATH || "");
   const cacheTtlMinutes = Number(process.env.CACHE_TTL_MINUTES || 60);
 
   if (!process.env.MASSIVE_API_KEY) {
@@ -57,9 +58,18 @@ function loadEnv() {
     massiveApiKey: process.env.MASSIVE_API_KEY,
     host,
     port,
+    basePath,
     cacheDir,
     cacheTtlMinutes
   };
+}
+
+function normalizeBasePath(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || trimmed === "/") return "";
+
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.replace(/\/+$/, "");
 }
 
 module.exports = {
