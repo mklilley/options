@@ -14,6 +14,8 @@ async function main() {
   const cache = new JsonCache({ cacheDir: config.cacheDir });
   const massiveClient = new MassiveClient({ apiKey: config.massiveApiKey });
 
+  await runCacheCleanup(cache, config);
+
   const server = http.createServer(async (req, res) => {
     try {
       await handleRequest(req, res, { config, cache, massiveClient });
@@ -25,6 +27,23 @@ async function main() {
   server.listen(config.port, config.host, () => {
     console.log(`Options history web app listening on http://${config.host}:${config.port}${config.basePath || ""}/`);
   });
+}
+
+async function runCacheCleanup(cache, config) {
+  try {
+    const summary = await cache.cleanup({ maxAgeDays: config.cacheCleanupMaxAgeDays });
+    if (summary.deleted > 0) {
+      console.log(
+        `Cache cleanup deleted ${summary.deleted} file(s): ` +
+        `${summary.expired} expired, ${summary.tooOld} older than ${config.cacheCleanupMaxAgeDays} days, ${summary.invalid} invalid`
+      );
+    }
+    if (summary.errors > 0) {
+      console.warn(`Cache cleanup skipped ${summary.errors} file(s) because they could not be deleted`);
+    }
+  } catch (error) {
+    console.warn(`Cache cleanup failed: ${error.message}`);
+  }
 }
 
 async function handleRequest(req, res, context) {

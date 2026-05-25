@@ -37,6 +37,7 @@ function loadEnv() {
   const host = process.env.HOST || "127.0.0.1";
   const basePath = normalizeBasePath(process.env.BASE_PATH || "");
   const cacheTtlMinutes = Number(process.env.CACHE_TTL_MINUTES || 60);
+  const cacheCleanupMaxAgeDays = Number(process.env.CACHE_CLEANUP_MAX_AGE_DAYS || 90);
 
   if (!process.env.MASSIVE_API_KEY) {
     throw new Error("MASSIVE_API_KEY is required in www/.env");
@@ -50,6 +51,10 @@ function loadEnv() {
     throw new Error("CACHE_TTL_MINUTES must be a positive integer");
   }
 
+  if (!Number.isInteger(cacheCleanupMaxAgeDays) || cacheCleanupMaxAgeDays <= 0) {
+    throw new Error("CACHE_CLEANUP_MAX_AGE_DAYS must be a positive integer");
+  }
+
   const cacheDir = path.resolve(projectRoot, process.env.CACHE_DIR || "./cache");
 
   return {
@@ -60,7 +65,8 @@ function loadEnv() {
     port,
     basePath,
     cacheDir,
-    cacheTtlMinutes
+    cacheTtlMinutes,
+    cacheCleanupMaxAgeDays
   };
 }
 

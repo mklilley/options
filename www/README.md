@@ -35,6 +35,7 @@ PORT=3001
 BASE_PATH=
 CACHE_DIR=./cache
 CACHE_TTL_MINUTES=60
+CACHE_CLEANUP_MAX_AGE_DAYS=90
 ```
 
 Use `BASE_PATH` when the Node app is reverse-proxied under a URL prefix:
@@ -154,5 +155,7 @@ Cache files are written to `www/cache/`.
 - Contract resolution is cached for a day.
 - Historical ranges ending before today are cached for longer.
 - Ranges including today use `CACHE_TTL_MINUTES`.
+- On startup, expired cache files are deleted.
+- On startup, cache files older than `CACHE_CLEANUP_MAX_AGE_DAYS` are also deleted. The default is `90` days.
 
 The cache is local JSON and can be deleted safely.
