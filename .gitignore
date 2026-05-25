@@ -143,8 +143,8 @@ vite.config.ts.timestamp-*
 .vite/
 
 # Local JSON storage backups
-data/*.bak
-data/*.tmp-*
-data/*.corrupt-*
+alerts/data/*.bak
+alerts/data/*.tmp-*
+alerts/data/*.corrupt-*
 www/cache/*
 !www/cache/.gitkeep

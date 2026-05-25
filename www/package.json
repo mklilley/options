@@ -1,5 +1,5 @@
 {
-  "name": "options-alert-www",
+  "name": "options-www",
   "version": "0.1.0",
   "private": true,
   "description": "Plain JavaScript web interface for historical Massive.com option prices.",
