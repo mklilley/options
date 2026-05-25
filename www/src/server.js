@@ -23,19 +23,49 @@ async function main() {
   });
 
   server.listen(config.port, config.host, () => {
-    console.log(`Options history web app listening on http://${config.host}:${config.port}`);
+    console.log(`Options history web app listening on http://${config.host}:${config.port}${config.basePath || ""}/`);
   });
 }
 
 async function handleRequest(req, res, context) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const routeUrl = routeUrlForBasePath(url, context.config.basePath);
 
-  if (url.pathname.startsWith("/api/")) {
-    await handleApi(req, res, url, context);
+  if (!routeUrl) {
+    sendJson(res, 404, { error: "Not found" });
     return;
   }
 
-  await serveStatic(res, context.config.publicDir, url.pathname);
+  if (routeUrl.redirectTo) {
+    res.writeHead(302, { location: routeUrl.redirectTo });
+    res.end();
+    return;
+  }
+
+  if (routeUrl.pathname.startsWith("/api/")) {
+    await handleApi(req, res, routeUrl, context);
+    return;
+  }
+
+  await serveStatic(res, context.config.publicDir, routeUrl.pathname);
+}
+
+function routeUrlForBasePath(url, basePath) {
+  const routeUrl = new URL(url);
+  if (!basePath) return routeUrl;
+
+  if (url.pathname === basePath) {
+    return {
+      redirectTo: `${basePath}/${url.search || ""}`
+    };
+  }
+
+  if (!url.pathname.startsWith(`${basePath}/`)) {
+    return null;
+  }
+
+  routeUrl.pathname = url.pathname.slice(basePath.length) || "/";
+  return routeUrl;
 }
 
 async function handleApi(req, res, url, context) {

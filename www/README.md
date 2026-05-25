@@ -30,8 +30,15 @@ cp .env.example .env
 MASSIVE_API_KEY=
 HOST=127.0.0.1
 PORT=3001
+BASE_PATH=
 CACHE_DIR=./cache
 CACHE_TTL_MINUTES=60
+```
+
+Use `BASE_PATH` when the Node app is reverse-proxied under a URL prefix:
+
+```env
+BASE_PATH=/options
 ```
 
 ## Run
@@ -53,6 +60,48 @@ Open:
 ```text
 http://localhost:3001
 ```
+
+If you set `BASE_PATH=/options`, open:
+
+```text
+http://localhost:3001/options/
+```
+
+Do not deploy `www/public` by itself for the full app. The HTML may load, but the API routes need the Node server because Massive requests and caching happen server-side.
+
+## Deploy Under A Subpath
+
+For a URL like:
+
+```text
+https://dev.lilley.io/options/
+```
+
+set:
+
+```env
+HOST=127.0.0.1
+PORT=3003
+BASE_PATH=/options
+```
+
+Then run the Node app and reverse proxy that path to it. Example Nginx shape:
+
+```nginx
+location = /options {
+  return 301 /options/;
+}
+
+location /options/ {
+  proxy_pass http://127.0.0.1:3003;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The public URL should be `/options/`, not `/options/www/public/`. The `public/` folder is an implementation detail served by the Node app.
 
 ## What It Fetches
 

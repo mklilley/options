@@ -6,6 +6,8 @@ const state = {
   hoverIndex: null
 };
 
+const API_BASE = normalizeApiBase(window.OPTIONS_API_BASE || defaultApiBase());
+
 const els = {
   form: document.querySelector("#historyForm"),
   serverStatus: document.querySelector("#serverStatus"),
@@ -73,7 +75,7 @@ async function loadExpirations() {
   resetSelect(els.strikeSelect, "Select expiry first");
 
   try {
-    const data = await getJson(`/api/expirations?${query({ underlyingSymbol, contractType })}`);
+    const data = await getJson(apiUrl(`expirations?${query({ underlyingSymbol, contractType })}`));
     state.expirations = data.expirations || [];
     fillSelect(els.expirationDate, state.expirations, "Select expiry");
     els.expirationDate.disabled = state.expirations.length === 0;
@@ -103,7 +105,7 @@ async function loadStrikes() {
   setStatus("Loading strikes");
 
   try {
-    const data = await getJson(`/api/strikes?${query({ underlyingSymbol, contractType, expirationDate })}`);
+    const data = await getJson(apiUrl(`strikes?${query({ underlyingSymbol, contractType, expirationDate })}`));
     state.strikes = data.strikes || [];
     fillSelect(els.strikeSelect, state.strikes, "Select strike");
     els.strikeSelect.disabled = state.strikes.length === 0;
@@ -130,7 +132,7 @@ async function loadHistory() {
   disableExport();
 
   try {
-    const data = await getJson(`/api/history?${query(params)}`);
+    const data = await getJson(apiUrl(`history?${query(params)}`));
     state.history = data;
     state.chartPoints = (data.bars || []).filter((bar) => Number.isFinite(bar.last));
     updateSummary(data);
@@ -244,7 +246,7 @@ function updateTable(bars) {
 }
 
 function updateExport(params) {
-  els.exportCsvLink.href = `/api/history.csv?${query(params)}`;
+  els.exportCsvLink.href = apiUrl(`history.csv?${query(params)}`);
   els.exportCsvLink.classList.remove("disabled");
   els.exportCsvLink.setAttribute("aria-disabled", "false");
 }
@@ -395,6 +397,28 @@ function query(params) {
     }
   });
   return search.toString();
+}
+
+function apiUrl(path) {
+  return `${API_BASE}/${String(path).replace(/^\/+/, "")}`;
+}
+
+function normalizeApiBase(value) {
+  const base = String(value || "api").trim() || "api";
+  return base.replace(/\/+$/, "");
+}
+
+function defaultApiBase() {
+  const publicMarker = "/www/public/";
+  const pathname = window.location.pathname;
+  const publicIndex = pathname.indexOf(publicMarker);
+
+  if (publicIndex !== -1) {
+    const prefix = pathname.slice(0, publicIndex);
+    return `${prefix || ""}/api`;
+  }
+
+  return "api";
 }
 
 function fillSelect(select, values, placeholder) {
