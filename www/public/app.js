@@ -488,7 +488,7 @@ function selectTicker(symbol) {
   }
 
   renderTickerPicks();
-  loadExpirations();
+  setStatus("Ticker selected");
 }
 
 function renderTickerPicks() {
