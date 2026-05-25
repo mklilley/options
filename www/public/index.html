@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Options History</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Options History</h1>
+          <p>Historical option aggregate prices from Massive.com</p>
+        </div>
+        <div class="status-pill" id="serverStatus">Ready</div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel controls-panel" aria-label="Option selector">
+          <form id="historyForm">
+            <div class="field-row">
+              <label class="field">
+                <span>Ticker</span>
+                <input id="underlyingSymbol" name="underlyingSymbol" value="TSLA" autocomplete="off" spellcheck="false">
+              </label>
+
+              <fieldset class="field option-type-field">
+                <legend>Type</legend>
+                <div class="segmented">
+                  <label>
+                    <input type="radio" name="contractType" value="call" checked>
+                    <span>Call</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="contractType" value="put">
+                    <span>Put</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <button type="button" id="loadExpiriesButton">Load expiries</button>
+            </div>
+
+            <div class="field-row">
+              <label class="field">
+                <span>Expiry</span>
+                <select id="expirationDate" name="expirationDate" disabled>
+                  <option value="">Load expiries first</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Strike</span>
+                <select id="strikeSelect" disabled>
+                  <option value="">Select expiry first</option>
+                </select>
+              </label>
+
+              <label class="field narrow-field">
+                <span>Manual strike</span>
+                <input id="strikePrice" name="strikePrice" inputmode="decimal" autocomplete="off" placeholder="350">
+              </label>
+            </div>
+
+            <div class="field-row">
+              <label class="field narrow-field">
+                <span>From</span>
+                <input id="fromDate" name="from" type="date">
+              </label>
+
+              <label class="field narrow-field">
+                <span>To</span>
+                <input id="toDate" name="to" type="date">
+              </label>
+
+              <label class="field narrow-field">
+                <span>Bars</span>
+                <select id="timespan" name="timespan">
+                  <option value="day">Daily</option>
+                  <option value="hour">Hourly</option>
+                  <option value="minute">1 minute</option>
+                  <option value="week">Weekly</option>
+                  <option value="month">Monthly</option>
+                </select>
+              </label>
+
+              <button type="submit" id="loadHistoryButton">Load history</button>
+              <a class="button secondary disabled" id="exportCsvLink" href="#" aria-disabled="true">Export CSV</a>
+            </div>
+          </form>
+        </section>
+
+        <section class="metrics-strip" id="metricsStrip" aria-label="Selected contract summary">
+          <div>
+            <span class="metric-label">Contract</span>
+            <strong id="contractMetric">No contract loaded</strong>
+          </div>
+          <div>
+            <span class="metric-label">Bars</span>
+            <strong id="barsMetric">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">Last</span>
+            <strong id="lastMetric">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">Volume</span>
+            <strong id="volumeMetric">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">Snapshot delta</span>
+            <strong id="deltaMetric">-</strong>
+          </div>
+        </section>
+
+        <section class="panel chart-panel" aria-label="Historical price chart">
+          <div class="chart-header">
+            <div>
+              <h2 id="chartTitle">Last price history</h2>
+              <p id="chartSubtitle">Aggregate close is used as the historical last price.</p>
+            </div>
+            <div id="cacheStatus" class="cache-status">No data</div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="priceChart" width="1200" height="520"></canvas>
+            <div id="hoverReadout" class="hover-readout" hidden></div>
+          </div>
+        </section>
+
+        <section class="data-grid">
+          <section class="panel snapshot-panel" aria-label="Current snapshot">
+            <h2>Current Snapshot</h2>
+            <dl id="snapshotList">
+              <div><dt>Delta</dt><dd>-</dd></div>
+              <div><dt>Gamma</dt><dd>-</dd></div>
+              <div><dt>Theta</dt><dd>-</dd></div>
+              <div><dt>Vega</dt><dd>-</dd></div>
+              <div><dt>IV</dt><dd>-</dd></div>
+              <div><dt>Open interest</dt><dd>-</dd></div>
+            </dl>
+            <p class="data-note">Snapshot Greeks are current values, not historical aggregate fields.</p>
+          </section>
+
+          <section class="panel table-panel" aria-label="Historical data table">
+            <div class="table-header">
+              <h2>Recent Bars</h2>
+              <span id="tableCount">0 rows</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Open</th>
+                    <th>High</th>
+                    <th>Low</th>
+                    <th>Last</th>
+                    <th>Volume</th>
+                    <th>VWAP</th>
+                    <th>Trades</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <tr>
+                    <td colspan="8" class="empty-cell">Load a contract to see historical bars.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

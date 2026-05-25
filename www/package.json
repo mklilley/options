@@ -1,0 +1,16 @@
+{
+  "name": "options-alert-www",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plain JavaScript web interface for historical Massive.com option prices.",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "build": "node scripts/check-syntax.js",
+    "typecheck": "node scripts/check-syntax.js"
+  }
+}

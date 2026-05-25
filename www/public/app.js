@@ -1,0 +1,490 @@
+const state = {
+  expirations: [],
+  strikes: [],
+  history: null,
+  chartPoints: [],
+  hoverIndex: null
+};
+
+const els = {
+  form: document.querySelector("#historyForm"),
+  serverStatus: document.querySelector("#serverStatus"),
+  underlyingSymbol: document.querySelector("#underlyingSymbol"),
+  expirationDate: document.querySelector("#expirationDate"),
+  strikeSelect: document.querySelector("#strikeSelect"),
+  strikePrice: document.querySelector("#strikePrice"),
+  fromDate: document.querySelector("#fromDate"),
+  toDate: document.querySelector("#toDate"),
+  timespan: document.querySelector("#timespan"),
+  loadExpiriesButton: document.querySelector("#loadExpiriesButton"),
+  loadHistoryButton: document.querySelector("#loadHistoryButton"),
+  exportCsvLink: document.querySelector("#exportCsvLink"),
+  chart: document.querySelector("#priceChart"),
+  chartTitle: document.querySelector("#chartTitle"),
+  chartSubtitle: document.querySelector("#chartSubtitle"),
+  cacheStatus: document.querySelector("#cacheStatus"),
+  hoverReadout: document.querySelector("#hoverReadout"),
+  contractMetric: document.querySelector("#contractMetric"),
+  barsMetric: document.querySelector("#barsMetric"),
+  lastMetric: document.querySelector("#lastMetric"),
+  volumeMetric: document.querySelector("#volumeMetric"),
+  deltaMetric: document.querySelector("#deltaMetric"),
+  snapshotList: document.querySelector("#snapshotList"),
+  tableCount: document.querySelector("#tableCount"),
+  historyTableBody: document.querySelector("#historyTableBody")
+};
+
+setDefaultDates();
+bindEvents();
+drawChart([]);
+
+function bindEvents() {
+  els.loadExpiriesButton.addEventListener("click", loadExpirations);
+  els.expirationDate.addEventListener("change", loadStrikes);
+  els.strikeSelect.addEventListener("change", () => {
+    if (els.strikeSelect.value) {
+      els.strikePrice.value = els.strikeSelect.value;
+    }
+  });
+  els.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadHistory();
+  });
+  els.chart.addEventListener("mousemove", handleChartHover);
+  els.chart.addEventListener("mouseleave", () => {
+    state.hoverIndex = null;
+    els.hoverReadout.hidden = true;
+    drawChart(state.chartPoints);
+  });
+  window.addEventListener("resize", () => drawChart(state.chartPoints));
+}
+
+async function loadExpirations() {
+  const underlyingSymbol = normalizedTicker();
+  const contractType = selectedContractType();
+  if (!underlyingSymbol) {
+    setStatus("Enter a ticker", true);
+    return;
+  }
+
+  setBusy(els.loadExpiriesButton, true);
+  setStatus("Loading expiries");
+  resetSelect(els.expirationDate, "Loading...");
+  resetSelect(els.strikeSelect, "Select expiry first");
+
+  try {
+    const data = await getJson(`/api/expirations?${query({ underlyingSymbol, contractType })}`);
+    state.expirations = data.expirations || [];
+    fillSelect(els.expirationDate, state.expirations, "Select expiry");
+    els.expirationDate.disabled = state.expirations.length === 0;
+    setCacheStatus(data.cache);
+    setStatus(state.expirations.length ? "Expiries loaded" : "No expiries found");
+
+    if (state.expirations.length > 0) {
+      els.expirationDate.value = state.expirations[0];
+      await loadStrikes();
+    }
+  } catch (error) {
+    resetSelect(els.expirationDate, "Could not load expiries");
+    setStatus(error.message, true);
+  } finally {
+    setBusy(els.loadExpiriesButton, false);
+  }
+}
+
+async function loadStrikes() {
+  const underlyingSymbol = normalizedTicker();
+  const contractType = selectedContractType();
+  const expirationDate = els.expirationDate.value;
+  if (!underlyingSymbol || !expirationDate) return;
+
+  resetSelect(els.strikeSelect, "Loading...");
+  els.strikeSelect.disabled = true;
+  setStatus("Loading strikes");
+
+  try {
+    const data = await getJson(`/api/strikes?${query({ underlyingSymbol, contractType, expirationDate })}`);
+    state.strikes = data.strikes || [];
+    fillSelect(els.strikeSelect, state.strikes, "Select strike");
+    els.strikeSelect.disabled = state.strikes.length === 0;
+    setCacheStatus(data.cache);
+    setStatus(state.strikes.length ? "Strikes loaded" : "No strikes found");
+
+    if (state.strikes.length > 0) {
+      const middle = Math.floor(state.strikes.length / 2);
+      els.strikeSelect.value = state.strikes[middle];
+      els.strikePrice.value = state.strikes[middle];
+    }
+  } catch (error) {
+    resetSelect(els.strikeSelect, "Could not load strikes");
+    setStatus(error.message, true);
+  }
+}
+
+async function loadHistory() {
+  const params = currentHistoryParams();
+  if (!params) return;
+
+  setBusy(els.loadHistoryButton, true);
+  setStatus("Loading history");
+  disableExport();
+
+  try {
+    const data = await getJson(`/api/history?${query(params)}`);
+    state.history = data;
+    state.chartPoints = (data.bars || []).filter((bar) => Number.isFinite(bar.last));
+    updateSummary(data);
+    updateSnapshot(data.snapshot);
+    updateTable(data.bars || []);
+    updateExport(params);
+    drawChart(state.chartPoints);
+    setCacheStatus(data.cache && data.cache.history);
+    setStatus(data.bars.length ? "History loaded" : "No bars returned");
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    setBusy(els.loadHistoryButton, false);
+  }
+}
+
+function currentHistoryParams() {
+  const underlyingSymbol = normalizedTicker();
+  const contractType = selectedContractType();
+  const expirationDate = els.expirationDate.value;
+  const strikePrice = Number(els.strikePrice.value);
+  const from = els.fromDate.value;
+  const to = els.toDate.value;
+  const timespan = els.timespan.value;
+
+  if (!underlyingSymbol) {
+    setStatus("Enter a ticker", true);
+    return null;
+  }
+  if (!expirationDate) {
+    setStatus("Select an expiry", true);
+    return null;
+  }
+  if (!Number.isFinite(strikePrice) || strikePrice <= 0) {
+    setStatus("Enter a positive strike", true);
+    return null;
+  }
+  if (!from || !to) {
+    setStatus("Select a date range", true);
+    return null;
+  }
+
+  return {
+    underlyingSymbol,
+    contractType,
+    expirationDate,
+    strikePrice,
+    from,
+    to,
+    timespan,
+    multiplier: 1
+  };
+}
+
+function updateSummary(data) {
+  const bars = data.bars || [];
+  const lastBar = bars[bars.length - 1] || null;
+  const contract = data.contract || {};
+
+  els.contractMetric.textContent = contract.optionContract || "No contract loaded";
+  els.barsMetric.textContent = String(bars.length);
+  els.lastMetric.textContent = lastBar ? money(lastBar.last) : "-";
+  els.volumeMetric.textContent = lastBar ? number(lastBar.volume) : "-";
+  els.deltaMetric.textContent = data.snapshot ? decimal(data.snapshot.delta, 4) : "-";
+
+  els.chartTitle.textContent = contract.optionContract || "Last price history";
+  els.chartSubtitle.textContent = [
+    contract.underlyingSymbol,
+    contract.contractType,
+    contract.expirationDate,
+    contract.strikePrice ? `strike ${formatStrike(contract.strikePrice)}` : null
+  ].filter(Boolean).join(" / ") || "Aggregate close is used as the historical last price.";
+}
+
+function updateSnapshot(snapshot) {
+  const values = [
+    ["Delta", decimal(snapshot && snapshot.delta, 4)],
+    ["Gamma", decimal(snapshot && snapshot.gamma, 4)],
+    ["Theta", decimal(snapshot && snapshot.theta, 4)],
+    ["Vega", decimal(snapshot && snapshot.vega, 4)],
+    ["IV", percentFromDecimal(snapshot && snapshot.impliedVolatility)],
+    ["Open interest", number(snapshot && snapshot.openInterest)]
+  ];
+
+  els.snapshotList.innerHTML = values.map(([label, value]) => (
+    `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
+  )).join("");
+}
+
+function updateTable(bars) {
+  const rows = bars.slice(-120).reverse();
+  els.tableCount.textContent = `${bars.length} row${bars.length === 1 ? "" : "s"}`;
+
+  if (rows.length === 0) {
+    els.historyTableBody.innerHTML = '<tr><td colspan="8" class="empty-cell">No bars returned for this range.</td></tr>';
+    return;
+  }
+
+  els.historyTableBody.innerHTML = rows.map((bar) => `
+    <tr>
+      <td>${escapeHtml(shortDate(bar.datetime))}</td>
+      <td>${escapeHtml(money(bar.open))}</td>
+      <td>${escapeHtml(money(bar.high))}</td>
+      <td>${escapeHtml(money(bar.low))}</td>
+      <td>${escapeHtml(money(bar.last))}</td>
+      <td>${escapeHtml(number(bar.volume))}</td>
+      <td>${escapeHtml(money(bar.vwap))}</td>
+      <td>${escapeHtml(number(bar.transactions))}</td>
+    </tr>
+  `).join("");
+}
+
+function updateExport(params) {
+  els.exportCsvLink.href = `/api/history.csv?${query(params)}`;
+  els.exportCsvLink.classList.remove("disabled");
+  els.exportCsvLink.setAttribute("aria-disabled", "false");
+}
+
+function disableExport() {
+  els.exportCsvLink.href = "#";
+  els.exportCsvLink.classList.add("disabled");
+  els.exportCsvLink.setAttribute("aria-disabled", "true");
+}
+
+function drawChart(points) {
+  const canvas = els.chart;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  const pad = { top: 22, right: 64, bottom: 42, left: 58 };
+  const plot = {
+    x: pad.left,
+    y: pad.top,
+    width: Math.max(1, rect.width - pad.left - pad.right),
+    height: Math.max(1, rect.height - pad.top - pad.bottom)
+  };
+
+  ctx.fillStyle = "#fbfcfa";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.strokeStyle = "#d9ded6";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(plot.x, plot.y, plot.width, plot.height);
+
+  if (!points.length) {
+    ctx.fillStyle = "#637066";
+    ctx.font = "14px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Load a contract to draw the chart", rect.width / 2, rect.height / 2);
+    return;
+  }
+
+  const prices = points.map((point) => point.last).filter(Number.isFinite);
+  let min = Math.min(...prices);
+  let max = Math.max(...prices);
+  if (min === max) {
+    min -= 0.5;
+    max += 0.5;
+  }
+  const padding = (max - min) * 0.08;
+  min -= padding;
+  max += padding;
+
+  drawGrid(ctx, plot, min, max);
+
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    const x = xForIndex(index, points.length, plot);
+    const y = yForPrice(point.last, min, max, plot);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#1b7f5f";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  if (state.hoverIndex !== null && points[state.hoverIndex]) {
+    const point = points[state.hoverIndex];
+    const x = xForIndex(state.hoverIndex, points.length, plot);
+    const y = yForPrice(point.last, min, max, plot);
+    ctx.strokeStyle = "rgba(179, 58, 58, 0.65)";
+    ctx.beginPath();
+    ctx.moveTo(x, plot.y);
+    ctx.lineTo(x, plot.y + plot.height);
+    ctx.stroke();
+    ctx.fillStyle = "#b33a3a";
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawGrid(ctx, plot, min, max) {
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
+
+  for (let i = 0; i <= 4; i += 1) {
+    const ratio = i / 4;
+    const y = plot.y + plot.height * ratio;
+    const price = max - (max - min) * ratio;
+
+    ctx.strokeStyle = "#e8ece6";
+    ctx.beginPath();
+    ctx.moveTo(plot.x, y);
+    ctx.lineTo(plot.x + plot.width, y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#637066";
+    ctx.fillText(money(price), plot.x - 8, y);
+  }
+}
+
+function handleChartHover(event) {
+  if (!state.chartPoints.length) return;
+
+  const rect = els.chart.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const plotLeft = 58;
+  const plotRight = rect.width - 64;
+  const clamped = Math.max(plotLeft, Math.min(plotRight, x));
+  const ratio = (clamped - plotLeft) / Math.max(1, plotRight - plotLeft);
+  const index = Math.round(ratio * (state.chartPoints.length - 1));
+
+  state.hoverIndex = index;
+  const point = state.chartPoints[index];
+  els.hoverReadout.hidden = false;
+  els.hoverReadout.style.left = `${Math.min(rect.width - 170, Math.max(8, x + 12))}px`;
+  els.hoverReadout.style.top = `${Math.max(8, event.clientY - rect.top - 48)}px`;
+  els.hoverReadout.innerHTML = `${escapeHtml(shortDate(point.datetime))}<br><strong>${escapeHtml(money(point.last))}</strong><br>Vol ${escapeHtml(number(point.volume))}`;
+  drawChart(state.chartPoints);
+}
+
+function xForIndex(index, length, plot) {
+  if (length <= 1) return plot.x;
+  return plot.x + (index / (length - 1)) * plot.width;
+}
+
+function yForPrice(price, min, max, plot) {
+  return plot.y + (1 - (price - min) / (max - min)) * plot.height;
+}
+
+async function getJson(url) {
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
+function query(params) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, value);
+    }
+  });
+  return search.toString();
+}
+
+function fillSelect(select, values, placeholder) {
+  select.innerHTML = [
+    `<option value="">${escapeHtml(placeholder)}</option>`,
+    ...values.map((value) => `<option value="${escapeHtml(String(value))}">${escapeHtml(formatStrike(value))}</option>`)
+  ].join("");
+}
+
+function resetSelect(select, label) {
+  select.innerHTML = `<option value="">${escapeHtml(label)}</option>`;
+  select.disabled = true;
+}
+
+function setBusy(button, isBusy) {
+  button.disabled = isBusy;
+}
+
+function setStatus(message, isError = false) {
+  els.serverStatus.textContent = message;
+  els.serverStatus.classList.toggle("is-error", Boolean(isError));
+}
+
+function setCacheStatus(cache) {
+  if (!cache) {
+    els.cacheStatus.textContent = "No cache";
+    return;
+  }
+  els.cacheStatus.textContent = cache.hit ? "Cache hit" : "Fresh fetch";
+}
+
+function normalizedTicker() {
+  const value = els.underlyingSymbol.value.trim().toUpperCase();
+  els.underlyingSymbol.value = value;
+  return value;
+}
+
+function selectedContractType() {
+  return document.querySelector('input[name="contractType"]:checked').value;
+}
+
+function setDefaultDates() {
+  const today = new Date();
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - 90);
+  els.toDate.value = today.toISOString().slice(0, 10);
+  els.fromDate.value = from.toISOString().slice(0, 10);
+}
+
+function money(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `$${value.toFixed(2)}`;
+}
+
+function number(value) {
+  if (!Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+function decimal(value, places) {
+  if (!Number.isFinite(value)) return "-";
+  return value.toFixed(places);
+}
+
+function percentFromDecimal(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function shortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().replace("T", " ").slice(0, 16);
+}
+
+function formatStrike(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return String(value);
+  return Number.isInteger(numberValue)
+    ? String(numberValue)
+    : String(Math.round(numberValue * 10000) / 10000);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[char]));
+}

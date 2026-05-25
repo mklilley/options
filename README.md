@@ -182,3 +182,14 @@ Massive response mapping is isolated in `src/massive/client.js`. If Massive chan
 ## Important Options Warning
 
 Options prices can be delayed, illiquid, stale, or unavailable. Bid/ask spreads can be wide, especially outside regular market hours or for thinly traded contracts. A bid/ask midpoint is only an estimate and may not be executable. This bot is an alerting tool, not trading advice or an execution system.
+
+## Web Options History Tool
+
+There is a separate plain JavaScript web app in `www/` for looking up historical option aggregate prices, charting them, caching repeated requests, and exporting CSV data.
+
+```sh
+cd www
+npm start
+```
+
+Then open `http://localhost:3001`.
