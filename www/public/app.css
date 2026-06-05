@@ -354,6 +354,45 @@ h2 {
   font-size: 13px;
 }
 
+.chart-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-legend i {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.legend-option {
+  background: var(--accent);
+}
+
+.legend-underlying {
+  background: #276fbf;
+}
+
 .chart-panel .cache-status {
   background: var(--surface-muted);
   color: var(--muted);
@@ -380,7 +419,7 @@ canvas {
 .hover-readout {
   position: absolute;
   z-index: 2;
-  min-width: 150px;
+  min-width: 210px;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -389,6 +428,19 @@ canvas {
   color: var(--text);
   font-size: 13px;
   pointer-events: none;
+}
+
+.readout-option,
+.readout-underlying {
+  font-weight: 700;
+}
+
+.readout-option {
+  color: var(--accent-dark);
+}
+
+.readout-underlying {
+  color: #276fbf;
 }
 
 .data-grid {
@@ -490,7 +542,8 @@ tbody tr:last-child td {
 @media (max-width: 900px) {
   .topbar,
   .chart-header,
-  .table-header {
+  .table-header,
+  .chart-side {
     align-items: stretch;
     flex-direction: column;
   }

@@ -142,7 +142,8 @@ The public URL should be `/options/`, not `/options/www/public/`. The `public/` 
 
 - Option expiries, strikes, and exact option contract tickers use `GET /v3/reference/options/contracts`.
 - Historical prices use aggregate bars for the resolved option ticker.
-- The chart uses aggregate close as the historical last price.
+- The chart uses aggregate close as the historical option price on the left axis.
+- The chart also fetches aggregate bars for the underlying ticker and plots its close on the right axis.
 - Current snapshot Greeks are fetched when available and included in the CSV as `snapshot_*` columns.
 
 Massive aggregate bars do not provide historical Greeks per bar. If you need historical delta/gamma/theta/vega for every timestamp, that needs a different data source or a derived options model.

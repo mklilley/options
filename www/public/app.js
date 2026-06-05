@@ -15,7 +15,9 @@ const state = {
   strikes: [],
   history: null,
   chartPoints: [],
-  hoverIndex: null,
+  underlyingChartPoints: [],
+  hoverTimeMs: null,
+  chartModel: null,
   tickerPicks: buildTickerPicks()
 };
 
@@ -53,7 +55,7 @@ const els = {
 setDefaultDates();
 renderTickerPicks();
 bindEvents();
-drawChart([]);
+drawChart();
 
 function bindEvents() {
   els.loadExpiriesButton.addEventListener("click", loadExpirations);
@@ -75,11 +77,11 @@ function bindEvents() {
   });
   els.chart.addEventListener("mousemove", handleChartHover);
   els.chart.addEventListener("mouseleave", () => {
-    state.hoverIndex = null;
+    state.hoverTimeMs = null;
     els.hoverReadout.hidden = true;
-    drawChart(state.chartPoints);
+    drawChart();
   });
-  window.addEventListener("resize", () => drawChart(state.chartPoints));
+  window.addEventListener("resize", drawChart);
 }
 
 async function loadExpirations() {
@@ -156,13 +158,15 @@ async function loadHistory() {
   try {
     const data = await getJson(apiUrl(`history?${query(params)}`));
     state.history = data;
-    state.chartPoints = (data.bars || []).filter((bar) => Number.isFinite(bar.last));
+    state.chartPoints = chartableBars(data.bars || []);
+    state.underlyingChartPoints = chartableBars(data.underlyingBars || []);
+    state.hoverTimeMs = null;
     updateSummary(data);
     updateSnapshot(data.snapshot);
     updateTable(data.bars || []);
     updateExport(params);
     rememberTicker(params.underlyingSymbol);
-    drawChart(state.chartPoints);
+    drawChart();
     setCacheStatus(data.cache && data.cache.history);
     setStatus(data.bars.length ? "History loaded" : "No bars returned");
   } catch (error) {
@@ -222,12 +226,15 @@ function updateSummary(data) {
   els.deltaMetric.textContent = data.snapshot ? decimal(data.snapshot.delta, 4) : "-";
 
   els.chartTitle.textContent = contract.optionContract || "Last price history";
-  els.chartSubtitle.textContent = [
+  const subtitle = [
     contract.underlyingSymbol,
     contract.contractType,
     contract.expirationDate,
     contract.strikePrice ? `strike ${formatStrike(contract.strikePrice)}` : null
-  ].filter(Boolean).join(" / ") || "Aggregate close is used as the historical last price.";
+  ].filter(Boolean).join(" / ");
+  els.chartSubtitle.textContent = subtitle
+    ? `${subtitle} / option left axis, underlying right axis`
+    : "Option and underlying aggregate close prices.";
 }
 
 function updateSnapshot(snapshot) {
@@ -280,7 +287,9 @@ function disableExport() {
   els.exportCsvLink.setAttribute("aria-disabled", "true");
 }
 
-function drawChart(points) {
+function drawChart() {
+  const optionPoints = state.chartPoints;
+  const underlyingPoints = state.underlyingChartPoints;
   const canvas = els.chart;
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -291,7 +300,7 @@ function drawChart(points) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, rect.width, rect.height);
 
-  const pad = { top: 22, right: 64, bottom: 42, left: 58 };
+  const pad = { top: 22, right: 76, bottom: 42, left: 62 };
   const plot = {
     x: pad.left,
     y: pad.top,
@@ -305,7 +314,9 @@ function drawChart(points) {
   ctx.lineWidth = 1;
   ctx.strokeRect(plot.x, plot.y, plot.width, plot.height);
 
-  if (!points.length) {
+  const allPoints = [...optionPoints, ...underlyingPoints];
+  if (!allPoints.length) {
+    state.chartModel = null;
     ctx.fillStyle = "#637066";
     ctx.font = "14px system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -313,55 +324,45 @@ function drawChart(points) {
     return;
   }
 
-  const prices = points.map((point) => point.last).filter(Number.isFinite);
-  let min = Math.min(...prices);
-  let max = Math.max(...prices);
-  if (min === max) {
-    min -= 0.5;
-    max += 0.5;
+  const times = allPoints.map((point) => point.timestampMs).filter(Number.isFinite);
+  let xMin = Math.min(...times);
+  let xMax = Math.max(...times);
+  if (xMin === xMax) {
+    xMin -= 30 * 60 * 1000;
+    xMax += 30 * 60 * 1000;
   }
-  const padding = (max - min) * 0.08;
-  min -= padding;
-  max += padding;
 
-  drawGrid(ctx, plot, min, max);
+  const optionAxis = axisFor(optionPoints.map((point) => point.last));
+  const underlyingAxis = axisFor(underlyingPoints.map((point) => point.last));
+  state.chartModel = { plot, xMin, xMax, optionAxis, underlyingAxis };
 
-  ctx.beginPath();
-  points.forEach((point, index) => {
-    const x = xForIndex(index, points.length, plot);
-    const y = yForPrice(point.last, min, max, plot);
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = "#1b7f5f";
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawGrid(ctx, plot, optionAxis, underlyingAxis);
+  drawSeries(ctx, optionPoints, xMin, xMax, optionAxis, plot, "#1b7f5f");
+  drawSeries(ctx, underlyingPoints, xMin, xMax, underlyingAxis, plot, "#276fbf");
 
-  if (state.hoverIndex !== null && points[state.hoverIndex]) {
-    const point = points[state.hoverIndex];
-    const x = xForIndex(state.hoverIndex, points.length, plot);
-    const y = yForPrice(point.last, min, max, plot);
+  if (state.hoverTimeMs !== null) {
+    const x = xForTime(state.hoverTimeMs, xMin, xMax, plot);
     ctx.strokeStyle = "rgba(179, 58, 58, 0.65)";
     ctx.beginPath();
     ctx.moveTo(x, plot.y);
     ctx.lineTo(x, plot.y + plot.height);
     ctx.stroke();
-    ctx.fillStyle = "#b33a3a";
-    ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fill();
+
+    drawHoverPoint(ctx, nearestPoint(optionPoints, state.hoverTimeMs), xMin, xMax, optionAxis, plot, "#1b7f5f");
+    drawHoverPoint(ctx, nearestPoint(underlyingPoints, state.hoverTimeMs), xMin, xMax, underlyingAxis, plot, "#276fbf");
   }
 }
 
-function drawGrid(ctx, plot, min, max) {
+function drawGrid(ctx, plot, optionAxis, underlyingAxis) {
+  const gridAxis = optionAxis || underlyingAxis;
+  if (!gridAxis) return;
+
   ctx.font = "12px system-ui, sans-serif";
   ctx.textBaseline = "middle";
-  ctx.textAlign = "right";
 
   for (let i = 0; i <= 4; i += 1) {
     const ratio = i / 4;
     const y = plot.y + plot.height * ratio;
-    const price = max - (max - min) * ratio;
 
     ctx.strokeStyle = "#e8ece6";
     ctx.beginPath();
@@ -369,38 +370,145 @@ function drawGrid(ctx, plot, min, max) {
     ctx.lineTo(plot.x + plot.width, y);
     ctx.stroke();
 
-    ctx.fillStyle = "#637066";
-    ctx.fillText(money(price), plot.x - 8, y);
+    if (optionAxis) {
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#637066";
+      ctx.fillText(money(valueForRatio(ratio, optionAxis)), plot.x - 8, y);
+    }
+
+    if (underlyingAxis) {
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#276fbf";
+      ctx.fillText(money(valueForRatio(ratio, underlyingAxis)), plot.x + plot.width + 8, y);
+    }
   }
 }
 
 function handleChartHover(event) {
-  if (!state.chartPoints.length) return;
+  if (!state.chartModel) return;
 
   const rect = els.chart.getBoundingClientRect();
   const x = event.clientX - rect.left;
-  const plotLeft = 58;
-  const plotRight = rect.width - 64;
-  const clamped = Math.max(plotLeft, Math.min(plotRight, x));
-  const ratio = (clamped - plotLeft) / Math.max(1, plotRight - plotLeft);
-  const index = Math.round(ratio * (state.chartPoints.length - 1));
+  const { plot, xMin, xMax } = state.chartModel;
+  const clamped = Math.max(plot.x, Math.min(plot.x + plot.width, x));
+  const ratio = (clamped - plot.x) / Math.max(1, plot.width);
+  const hoverTimeMs = xMin + ratio * (xMax - xMin);
 
-  state.hoverIndex = index;
-  const point = state.chartPoints[index];
+  state.hoverTimeMs = hoverTimeMs;
   els.hoverReadout.hidden = false;
-  els.hoverReadout.style.left = `${Math.min(rect.width - 170, Math.max(8, x + 12))}px`;
-  els.hoverReadout.style.top = `${Math.max(8, event.clientY - rect.top - 48)}px`;
-  els.hoverReadout.innerHTML = `${escapeHtml(shortDate(point.datetime))}<br><strong>${escapeHtml(money(point.last))}</strong><br>Vol ${escapeHtml(number(point.volume))}`;
-  drawChart(state.chartPoints);
+  const maxReadoutLeft = Math.max(8, rect.width - 230);
+  els.hoverReadout.style.left = `${Math.min(maxReadoutLeft, Math.max(8, x + 12))}px`;
+  els.hoverReadout.style.top = `${Math.max(8, event.clientY - rect.top - 72)}px`;
+  els.hoverReadout.innerHTML = hoverReadoutHtml(hoverTimeMs);
+  drawChart();
 }
 
-function xForIndex(index, length, plot) {
-  if (length <= 1) return plot.x;
-  return plot.x + (index / (length - 1)) * plot.width;
+function drawSeries(ctx, points, xMin, xMax, axis, plot, color) {
+  if (!points.length || !axis) return;
+
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    const x = xForTime(point.timestampMs, xMin, xMax, plot);
+    const y = yForValue(point.last, axis, plot);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
-function yForPrice(price, min, max, plot) {
-  return plot.y + (1 - (price - min) / (max - min)) * plot.height;
+function drawHoverPoint(ctx, point, xMin, xMax, axis, plot, color) {
+  if (!point || !axis) return;
+  const x = xForTime(point.timestampMs, xMin, xMax, plot);
+  const y = yForValue(point.last, axis, plot);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function xForTime(timestampMs, xMin, xMax, plot) {
+  if (xMax === xMin) return plot.x;
+  return plot.x + ((timestampMs - xMin) / (xMax - xMin)) * plot.width;
+}
+
+function yForValue(value, axis, plot) {
+  return plot.y + (1 - (value - axis.min) / (axis.max - axis.min)) * plot.height;
+}
+
+function valueForRatio(ratio, axis) {
+  return axis.max - (axis.max - axis.min) * ratio;
+}
+
+function axisFor(values) {
+  const finiteValues = values.filter(Number.isFinite);
+  if (!finiteValues.length) return null;
+
+  let min = Math.min(...finiteValues);
+  let max = Math.max(...finiteValues);
+
+  if (min === max) {
+    const fixedPadding = Math.max(Math.abs(min) * 0.01, 0.5);
+    min -= fixedPadding;
+    max += fixedPadding;
+  } else {
+    const padding = (max - min) * 0.08;
+    min -= padding;
+    max += padding;
+  }
+
+  return { min, max };
+}
+
+function chartableBars(bars) {
+  return bars
+    .map((bar) => {
+      const timestampNumber = Number(bar.timestamp);
+      const timestampMs = Number.isFinite(timestampNumber)
+        ? timestampNumber
+        : Date.parse(bar.datetime);
+      const last = bar.last === null || bar.last === undefined ? null : Number(bar.last);
+      return {
+        ...bar,
+        timestampMs,
+        last
+      };
+    })
+    .filter((bar) => Number.isFinite(bar.timestampMs) && Number.isFinite(bar.last))
+    .sort((a, b) => a.timestampMs - b.timestampMs);
+}
+
+function nearestPoint(points, timestampMs) {
+  if (!points.length || !Number.isFinite(timestampMs)) return null;
+
+  let nearest = points[0];
+  let nearestDistance = Math.abs(points[0].timestampMs - timestampMs);
+
+  for (let index = 1; index < points.length; index += 1) {
+    const distance = Math.abs(points[index].timestampMs - timestampMs);
+    if (distance < nearestDistance) {
+      nearest = points[index];
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+}
+
+function hoverReadoutHtml(hoverTimeMs) {
+  const optionPoint = nearestPoint(state.chartPoints, hoverTimeMs);
+  const underlyingPoint = nearestPoint(state.underlyingChartPoints, hoverTimeMs);
+
+  return [
+    `<strong>${escapeHtml(shortDate(new Date(hoverTimeMs).toISOString()))}</strong>`,
+    optionPoint
+      ? `<span class="readout-option">Option ${escapeHtml(money(optionPoint.last))}</span> <span>Vol ${escapeHtml(number(optionPoint.volume))}</span>`
+      : null,
+    underlyingPoint
+      ? `<span class="readout-underlying">Underlying ${escapeHtml(money(underlyingPoint.last))}</span> <span>Vol ${escapeHtml(number(underlyingPoint.volume))}</span>`
+      : null
+  ].filter(Boolean).join("<br>");
 }
 
 async function getJson(url) {

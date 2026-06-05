@@ -179,6 +179,27 @@ async function getHistoryPayload(url, context) {
     () => context.massiveClient.getAggregates(optionContract, historyParams)
   );
 
+  const underlyingParams = {
+    underlyingSymbol: params.underlyingSymbol,
+    multiplier: params.multiplier,
+    timespan: params.timespan,
+    from: params.from,
+    to: params.to
+  };
+
+  let underlyingHistory = null;
+  let underlyingHistoryError = null;
+  try {
+    underlyingHistory = await context.cache.getOrSet(
+      "underlyingHistory",
+      underlyingParams,
+      ttl,
+      () => context.massiveClient.getAggregates(params.underlyingSymbol, underlyingParams)
+    );
+  } catch (error) {
+    underlyingHistoryError = error.message;
+  }
+
   let snapshot = null;
   let snapshotError = null;
   try {
@@ -208,15 +229,23 @@ async function getHistoryPayload(url, context) {
       timespan: params.timespan
     },
     bars: history.data.rows,
+    underlyingBars: underlyingHistory ? underlyingHistory.data.rows : [],
     resultMeta: {
       status: history.data.status,
       queryCount: history.data.queryCount,
       resultsCount: history.data.resultsCount
     },
+    underlyingResultMeta: underlyingHistory ? {
+      status: underlyingHistory.data.status,
+      queryCount: underlyingHistory.data.queryCount,
+      resultsCount: underlyingHistory.data.resultsCount
+    } : null,
     snapshot,
     snapshotError,
+    underlyingHistoryError,
     cache: {
       history: history.cache,
+      underlyingHistory: underlyingHistory ? underlyingHistory.cache : null,
       resolved: resolved.cache
     }
   };
@@ -433,6 +462,9 @@ function sendError(res, error) {
 
 function toCsv(payload) {
   const snapshot = payload.snapshot || {};
+  const underlyingByTimestamp = new Map(
+    (payload.underlyingBars || []).map((bar) => [String(bar.timestamp), bar])
+  );
   const columns = [
     "optionContract",
     "underlyingSymbol",
@@ -448,6 +480,13 @@ function toCsv(payload) {
     "volume",
     "vwap",
     "transactions",
+    "underlying_open",
+    "underlying_high",
+    "underlying_low",
+    "underlying_last",
+    "underlying_volume",
+    "underlying_vwap",
+    "underlying_transactions",
     "snapshot_delta",
     "snapshot_gamma",
     "snapshot_theta",
@@ -456,28 +495,38 @@ function toCsv(payload) {
     "snapshot_open_interest"
   ];
 
-  const rows = payload.bars.map((bar) => ({
-    optionContract: payload.contract.optionContract,
-    underlyingSymbol: payload.contract.underlyingSymbol,
-    contractType: payload.contract.contractType,
-    expirationDate: payload.contract.expirationDate,
-    strikePrice: payload.contract.strikePrice,
-    timestamp: bar.timestamp,
-    datetime: bar.datetime,
-    open: bar.open,
-    high: bar.high,
-    low: bar.low,
-    last: bar.last,
-    volume: bar.volume,
-    vwap: bar.vwap,
-    transactions: bar.transactions,
-    snapshot_delta: snapshot.delta,
-    snapshot_gamma: snapshot.gamma,
-    snapshot_theta: snapshot.theta,
-    snapshot_vega: snapshot.vega,
-    snapshot_implied_volatility: snapshot.impliedVolatility,
-    snapshot_open_interest: snapshot.openInterest
-  }));
+  const rows = payload.bars.map((bar) => {
+    const underlyingBar = underlyingByTimestamp.get(String(bar.timestamp)) || {};
+    return {
+      optionContract: payload.contract.optionContract,
+      underlyingSymbol: payload.contract.underlyingSymbol,
+      contractType: payload.contract.contractType,
+      expirationDate: payload.contract.expirationDate,
+      strikePrice: payload.contract.strikePrice,
+      timestamp: bar.timestamp,
+      datetime: bar.datetime,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      last: bar.last,
+      volume: bar.volume,
+      vwap: bar.vwap,
+      transactions: bar.transactions,
+      underlying_open: underlyingBar.open,
+      underlying_high: underlyingBar.high,
+      underlying_low: underlyingBar.low,
+      underlying_last: underlyingBar.last,
+      underlying_volume: underlyingBar.volume,
+      underlying_vwap: underlyingBar.vwap,
+      underlying_transactions: underlyingBar.transactions,
+      snapshot_delta: snapshot.delta,
+      snapshot_gamma: snapshot.gamma,
+      snapshot_theta: snapshot.theta,
+      snapshot_vega: snapshot.vega,
+      snapshot_implied_volatility: snapshot.impliedVolatility,
+      snapshot_open_interest: snapshot.openInterest
+    };
+  });
 
   return [
     columns.join(","),

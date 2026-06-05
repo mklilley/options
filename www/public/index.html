@@ -127,7 +127,13 @@
               <h2 id="chartTitle">Last price history</h2>
               <p id="chartSubtitle">Aggregate close is used as the historical last price.</p>
             </div>
-            <div id="cacheStatus" class="cache-status">No data</div>
+            <div class="chart-side">
+              <div class="chart-legend" aria-label="Chart legend">
+                <span><i class="legend-option"></i>Option left axis</span>
+                <span><i class="legend-underlying"></i>Underlying right axis</span>
+              </div>
+              <div id="cacheStatus" class="cache-status">No data</div>
+            </div>
           </div>
           <div class="chart-wrap">
             <canvas id="priceChart" width="1200" height="520"></canvas>
