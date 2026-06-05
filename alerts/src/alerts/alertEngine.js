@@ -1,5 +1,5 @@
 const { evaluateAlert, markAlertUnchecked } = require("./alertEvaluator");
-const { selectAlertPrice } = require("../massive/priceSelector");
+const { selectAggregateVwPrice } = require("../massive/priceSelector");
 const { nowIso } = require("../utils/dates");
 const {
   formatAlertTriggeredMessage,
@@ -62,11 +62,13 @@ class AlertEngine {
 
       for (const alert of alertsToCheck) {
         try {
-          const snapshot = await this.massiveClient.getOptionSnapshot(alert.underlyingSymbol, alert.optionContract);
-          const selectedPrice = selectAlertPrice(snapshot, {
-            staleTradeMaxMinutes: this.config.staleTradeMaxMinutes,
-            nowMs: Date.parse(checkedAt)
+          const aggregateBars = await this.massiveClient.getRecentAggregateBars(alert.optionContract, {
+            nowMs: Date.parse(checkedAt),
+            delayMinutes: this.config.aggregateDelayMinutes,
+            lookbackMinutes: this.config.aggregateLookbackMinutes,
+            barMinutes: this.config.aggregateBarMinutes
           });
+          const selectedPrice = selectAggregateVwPrice(aggregateBars);
 
           if (!selectedPrice.available) {
             Object.assign(alert, markAlertUnchecked(alert, selectedPrice, checkedAt));
@@ -75,13 +77,14 @@ class AlertEngine {
             this.logger.info({
               alertId: alert.id,
               optionContract: alert.optionContract,
-              reason: selectedPrice.reason
+              reason: selectedPrice.reason,
+              aggregateRange: selectedPrice.aggregateRange
             }, "Alert skipped because no usable option price was available");
 
             summaries.push({
               alert,
               selectedPrice,
-              snapshot,
+              aggregateBars,
               status: "skipped",
               reason: selectedPrice.reason
             });
@@ -101,7 +104,7 @@ class AlertEngine {
             summaries.push({
               alert,
               selectedPrice,
-              snapshot,
+              aggregateBars,
               status: "paused",
               evaluation: {
                 absoluteChange,
@@ -121,7 +124,7 @@ class AlertEngine {
             if (alert.chatId) {
               triggeredMessages.push({
                 chatId: alert.chatId,
-                message: formatAlertTriggeredMessage(alert, selectedPrice, evaluation, snapshot, checkedAt)
+                message: formatAlertTriggeredMessage(alert, selectedPrice, evaluation, aggregateBars, checkedAt)
               });
             } else {
               this.logger.error({
@@ -134,7 +137,7 @@ class AlertEngine {
           summaries.push({
             alert,
             selectedPrice,
-            snapshot,
+            aggregateBars,
             status: evaluation.status,
             evaluation
           });

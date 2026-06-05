@@ -85,6 +85,51 @@ class MassiveClient {
     return normalizeSnapshot(response.results || response);
   }
 
+  async getRecentAggregateBars(optionContract, options = {}) {
+    const nowMs = options.nowMs || Date.now();
+    const delayMinutes = options.delayMinutes || 16;
+    const lookbackMinutes = options.lookbackMinutes || 60;
+    const barMinutes = options.barMinutes || 5;
+    const barMs = barMinutes * 60 * 1000;
+    const cutoffMs = nowMs - (delayMinutes * 60 * 1000);
+    const toMs = Math.floor((cutoffMs - barMs) / barMs) * barMs;
+    const fromMs = toMs - (lookbackMinutes * 60 * 1000);
+
+    const response = await this.request(
+      `/v2/aggs/ticker/${encodeURIComponent(optionContract)}/range/${encodeURIComponent(barMinutes)}/minute/${encodeURIComponent(fromMs)}/${encodeURIComponent(toMs)}`,
+      {
+        adjusted: "true",
+        sort: "asc",
+        limit: "50000"
+      }
+    );
+
+    const rows = Array.isArray(response.results)
+      ? response.results.map(normalizeAggregate).filter((row) => (
+        Number.isFinite(row.timestampMs) &&
+        row.timestampMs >= fromMs &&
+        row.timestampMs <= toMs
+      ))
+      : [];
+
+    return {
+      status: response.status || null,
+      queryCount: response.queryCount || response.query_count || rows.length,
+      resultsCount: response.resultsCount || response.results_count || rows.length,
+      range: {
+        from: new Date(fromMs).toISOString(),
+        to: new Date(toMs).toISOString(),
+        fromMs,
+        toMs,
+        delayMinutes,
+        lookbackMinutes,
+        barMinutes
+      },
+      rows,
+      latestBar: rows[rows.length - 1] || null
+    };
+  }
+
   async getUnderlyingPriceHint(underlyingSymbol, contractType, expirationDate) {
     try {
       const response = await this.request(`/v3/snapshot/options/${encodeURIComponent(underlyingSymbol.toUpperCase())}`, {
@@ -215,6 +260,23 @@ function normalizeContract(raw) {
   };
 }
 
+function normalizeAggregate(raw) {
+  const timestampMs = toNumber(getFirstValue(raw, ["t", "timestamp"]));
+
+  return {
+    timestampMs,
+    datetime: timestampMs ? new Date(timestampMs).toISOString() : null,
+    open: toNumber(getFirstValue(raw, ["o", "open"])),
+    high: toNumber(getFirstValue(raw, ["h", "high"])),
+    low: toNumber(getFirstValue(raw, ["l", "low"])),
+    close: toNumber(getFirstValue(raw, ["c", "close"])),
+    volume: toNumber(getFirstValue(raw, ["v", "volume"])),
+    vwap: toNumber(getFirstValue(raw, ["vw", "vwap"])),
+    transactions: toNumber(getFirstValue(raw, ["n", "transactions"])),
+    raw
+  };
+}
+
 function normalizeSnapshot(raw) {
   const detailsRaw = getFirstValue(raw, ["details"]) || {};
   const tradeRaw = getFirstValue(raw, ["last_trade", "lastTrade"]) || {};
@@ -282,5 +344,6 @@ module.exports = {
   MassiveClient,
   MassiveApiError,
   normalizeContract,
+  normalizeAggregate,
   normalizeSnapshot
 };

@@ -8,8 +8,8 @@ const ConditionKindSchema = z.enum([
 
 const DirectionSchema = z.enum(["above", "below"]);
 const ContractTypeSchema = z.enum(["call", "put"]);
-const PriceBasisSchema = z.enum(["last_trade", "last_trade_with_mid_fallback"]);
-const PriceSourceSchema = z.enum(["last_trade", "mid_bid_ask", "unavailable"]);
+const PriceBasisSchema = z.enum(["last_trade", "last_trade_with_mid_fallback", "aggregate_vw"]);
+const PriceSourceSchema = z.enum(["last_trade", "mid_bid_ask", "aggregate_vw", "unavailable"]);
 const TriggerStateSchema = z.enum(["armed", "triggered"]);
 
 const IsoDateTimeSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {

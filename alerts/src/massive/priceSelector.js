@@ -57,6 +57,52 @@ function selectAlertPrice(snapshot, options = {}) {
   };
 }
 
+function selectAggregateVwPrice(aggregateBars) {
+  const latestBar = aggregateBars && aggregateBars.latestBar;
+
+  if (!latestBar) {
+    return {
+      source: "unavailable",
+      price: null,
+      available: false,
+      reason: "no aggregate bars returned for the lookback window",
+      aggregateRange: aggregateBars ? aggregateBars.range : null
+    };
+  }
+
+  if (!isPositiveNumber(latestBar.vwap)) {
+    return {
+      source: "unavailable",
+      price: null,
+      available: false,
+      reason: "latest aggregate bar has no positive VW price",
+      aggregateRange: aggregateBars.range,
+      aggregateBarAt: latestBar.datetime,
+      aggregateBarClose: latestBar.close,
+      aggregateBarVolume: latestBar.volume,
+      aggregateBarTransactions: latestBar.transactions
+    };
+  }
+
+  return {
+    source: "aggregate_vw",
+    price: latestBar.vwap,
+    available: true,
+    reason: null,
+    bid: null,
+    ask: null,
+    lastTradePrice: null,
+    aggregateRange: aggregateBars.range,
+    aggregateBarAt: latestBar.datetime,
+    aggregateBarOpen: latestBar.open,
+    aggregateBarHigh: latestBar.high,
+    aggregateBarLow: latestBar.low,
+    aggregateBarClose: latestBar.close,
+    aggregateBarVolume: latestBar.volume,
+    aggregateBarTransactions: latestBar.transactions
+  };
+}
+
 function buildUnavailableReason(trade, quote, staleTradeMaxMinutes, nowMs) {
   const reasons = [];
 
@@ -77,5 +123,6 @@ function buildUnavailableReason(trade, quote, staleTradeMaxMinutes, nowMs) {
 }
 
 module.exports = {
-  selectAlertPrice
+  selectAlertPrice,
+  selectAggregateVwPrice
 };

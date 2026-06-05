@@ -11,8 +11,7 @@ This app intentionally does not use a database. It stores alerts and small bits 
 - Discovers option expiries, strikes, and exact option contract tickers from Massive.com.
 - Stores the resolved option contract ticker and uses that exact ticker for monitoring.
 - Checks active alerts on a schedule, defaulting to every 15 minutes.
-- Prefers latest trade price when it is available and not stale.
-- Falls back to bid/ask mid price when latest trade is missing or stale.
+- Uses recent 5-minute aggregate VW prices for alert checks.
 - Avoids duplicate repeated alerts with a simple armed/triggered state and hysteresis.
 - Supports manual `/check`, pause, resume, threshold edit, entry-price edit, and delete.
 
@@ -47,8 +46,10 @@ TELEGRAM_ADMIN_USER_ID=
 MASSIVE_API_KEY=
 POLL_INTERVAL_MINUTES=15
 DATA_DIR=./data
-DEFAULT_PRICE_BASIS=last_trade
-STALE_TRADE_MAX_MINUTES=30
+DEFAULT_PRICE_BASIS=aggregate_vw
+AGGREGATE_LOOKBACK_MINUTES=60
+AGGREGATE_DELAY_MINUTES=16
+AGGREGATE_BAR_MINUTES=5
 ```
 
 `TELEGRAM_ALLOWED_USER_IDS` is a comma-separated list, for example:
@@ -61,7 +62,15 @@ Leave it blank temporarily if you need users to message the bot first so you can
 
 `TELEGRAM_ADMIN_USER_ID` is optional and reserved for future admin-only commands. Core alert functionality works for every allowed user.
 
-`DEFAULT_PRICE_BASIS=last_trade` means latest trade is preferred, with bid/ask mid fallback when the trade is missing or stale.
+`DEFAULT_PRICE_BASIS=aggregate_vw` means alert checks use the latest available aggregate volume-weighted average price.
+
+Aggregate pricing settings:
+
+- `AGGREGATE_LOOKBACK_MINUTES=60` checks the prior 60-minute window.
+- `AGGREGATE_DELAY_MINUTES=16` keeps requests behind the current time for delayed data access.
+- `AGGREGATE_BAR_MINUTES=5` requests 5-minute aggregate bars.
+
+The bot picks the most recent returned aggregate bar in that window and uses its `vw` value. If no bar is returned, or the latest bar has no positive `vw`, the alert is skipped for that cycle.
 
 ## Install
 
@@ -153,10 +162,9 @@ Supported directions:
 Every polling cycle:
 
 1. Active alerts are loaded from `alerts.json`.
-2. The stored Massive option contract ticker is checked with the option snapshot endpoint.
+2. The stored Massive option contract ticker is checked with the options aggregate bars endpoint.
 3. The selected alert price is chosen:
-   - latest trade if available and not stale
-   - otherwise bid/ask mid if both bid and ask are positive
+   - latest returned aggregate bar `vw`
    - otherwise the alert is skipped for that cycle
 4. Change from entry is calculated.
 5. The condition is evaluated.
@@ -175,10 +183,11 @@ Example: an alert for `above +25%` triggers at `+25%` and will not re-arm until 
 The app uses:
 
 - `GET /v3/reference/options/contracts` for contracts, expiries, strikes, and final contract resolution.
-- `GET /v3/snapshot/options/{underlyingAsset}/{optionContract}` for monitoring.
+- `GET /v2/aggs/ticker/{optionContract}/range/{multiplier}/minute/{from}/{to}` for monitoring.
+- `GET /v3/snapshot/options/{underlyingAsset}` only as a setup helper when trying to estimate nearby strikes.
 
 Massive response mapping is isolated in `src/massive/client.js`. If Massive changes field names, adjust that file first.
 
 ## Important Options Warning
 
-Options prices can be delayed, illiquid, stale, or unavailable. Bid/ask spreads can be wide, especially outside regular market hours or for thinly traded contracts. A bid/ask midpoint is only an estimate and may not be executable. This bot is an alerting tool, not trading advice or an execution system.
+Options prices can be delayed, illiquid, stale, or unavailable. Aggregate bars only exist when qualifying trades occur, so thinly traded contracts may have no usable `vw` in the lookback window. This bot is an alerting tool, not trading advice or an execution system.

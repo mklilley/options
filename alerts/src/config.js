@@ -31,19 +31,22 @@ const EnvSchema = z.object({
   MASSIVE_API_KEY: z.string().min(1, "MASSIVE_API_KEY is required"),
   POLL_INTERVAL_MINUTES: optionalNumber(15),
   DATA_DIR: optionalString("./data"),
-  DEFAULT_PRICE_BASIS: optionalString("last_trade"),
-  STALE_TRADE_MAX_MINUTES: optionalNumber(30)
+  DEFAULT_PRICE_BASIS: optionalString("aggregate_vw"),
+  STALE_TRADE_MAX_MINUTES: optionalNumber(30),
+  AGGREGATE_LOOKBACK_MINUTES: optionalNumber(60),
+  AGGREGATE_DELAY_MINUTES: optionalNumber(16),
+  AGGREGATE_BAR_MINUTES: optionalNumber(5)
 });
 
-const SupportedPriceBasis = new Set(["last_trade", "last_trade_with_mid_fallback"]);
+const SupportedPriceBasis = new Set(["last_trade", "last_trade_with_mid_fallback", "aggregate_vw"]);
 
 function normalizePriceBasis(value) {
   if (!SupportedPriceBasis.has(value)) {
     throw new Error(`DEFAULT_PRICE_BASIS must be one of: ${Array.from(SupportedPriceBasis).join(", ")}`);
   }
 
-  // The alert engine always falls back to bid/ask mid when last trade is absent or stale.
-  return "last_trade_with_mid_fallback";
+  // The alert engine uses aggregate VW because this Massive plan does not include options trades/quotes.
+  return "aggregate_vw";
 }
 
 function parseAllowedUserIds(value) {
@@ -80,7 +83,10 @@ function loadConfig() {
     pollIntervalMinutes: env.POLL_INTERVAL_MINUTES,
     dataDir,
     defaultPriceBasis: normalizePriceBasis(env.DEFAULT_PRICE_BASIS),
-    staleTradeMaxMinutes: env.STALE_TRADE_MAX_MINUTES
+    staleTradeMaxMinutes: env.STALE_TRADE_MAX_MINUTES,
+    aggregateLookbackMinutes: env.AGGREGATE_LOOKBACK_MINUTES,
+    aggregateDelayMinutes: env.AGGREGATE_DELAY_MINUTES,
+    aggregateBarMinutes: env.AGGREGATE_BAR_MINUTES
   };
 }
 

@@ -16,6 +16,7 @@ function optionTitle(alert) {
 function sourceLabel(source) {
   if (source === "last_trade") return "last trade";
   if (source === "mid_bid_ask") return "bid/ask mid";
+  if (source === "aggregate_vw") return "aggregate VW";
   return "unavailable";
 }
 
@@ -46,6 +47,11 @@ function formatNumber(value) {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
 }
 
+function formatInteger(value) {
+  if (!Number.isFinite(value)) return "unavailable";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
 function formatAlertCompact(alert) {
   const lines = [
     optionTitle(alert),
@@ -65,15 +71,7 @@ function formatAlertCompact(alert) {
   return lines.join("\n");
 }
 
-function formatAlertTriggeredMessage(alert, selectedPrice, evaluation, snapshot, checkedAt) {
-  const bidAsk = selectedPrice.bid && selectedPrice.ask
-    ? `${formatMoney(selectedPrice.bid)} / ${formatMoney(selectedPrice.ask)}`
-    : "unavailable";
-
-  const lastTrade = selectedPrice.lastTradePrice
-    ? formatMoney(selectedPrice.lastTradePrice)
-    : "unavailable";
-
+function formatAlertTriggeredMessage(alert, selectedPrice, evaluation, aggregateBars, checkedAt) {
   return [
     "🚨 Option alert triggered",
     "",
@@ -88,10 +86,14 @@ function formatAlertTriggeredMessage(alert, selectedPrice, evaluation, snapshot,
     "",
     `Threshold: ${conditionLabel(alert.condition)}`,
     "",
-    `Bid/Ask: ${bidAsk}`,
-    `Last trade: ${lastTrade}`,
+    selectedPrice.aggregateBarAt ? `Aggregate bar: ${formatDateTime(selectedPrice.aggregateBarAt)}` : null,
+    Number.isFinite(selectedPrice.aggregateBarClose) ? `Bar close: ${formatMoney(selectedPrice.aggregateBarClose)}` : null,
+    Number.isFinite(selectedPrice.aggregateBarVolume) ? `Volume: ${formatInteger(selectedPrice.aggregateBarVolume)}` : null,
+    Number.isFinite(selectedPrice.aggregateBarTransactions) ? `Trades: ${formatInteger(selectedPrice.aggregateBarTransactions)}` : null,
+    aggregateBars && aggregateBars.range
+      ? `Lookback: ${formatDateTime(aggregateBars.range.from)} to ${formatDateTime(aggregateBars.range.to)}`
+      : null,
     `Checked: ${formatDateTime(checkedAt)}`,
-    snapshot && snapshot.marketStatus ? `Market status: ${snapshot.marketStatus}` : null
   ].filter(Boolean).join("\n");
 }
 
@@ -118,7 +120,7 @@ function formatCheckSummary(summaries) {
 
     if (summary.status === "skipped") {
       lines.push("Current: unavailable");
-      lines.push(`Status: skipped, ${summary.reason || "no last trade or valid bid/ask"}`);
+      lines.push(`Status: skipped, ${summary.reason || "no aggregate VW available"}`);
       continue;
     }
 
@@ -126,6 +128,9 @@ function formatCheckSummary(summaries) {
     const evaluation = summary.evaluation || {};
     lines.push(`Current: ${formatMoney(selectedPrice.price)}`);
     lines.push(`Source: ${sourceLabel(selectedPrice.source)}`);
+    if (selectedPrice.aggregateBarAt) {
+      lines.push(`Bar: ${formatDateTime(selectedPrice.aggregateBarAt)}`);
+    }
 
     if (Number.isFinite(evaluation.absoluteChange) && Number.isFinite(evaluation.percentChange)) {
       lines.push(`Change: ${formatSignedMoney(evaluation.absoluteChange)} / ${formatPercent(evaluation.percentChange)}`);
@@ -166,7 +171,7 @@ function formatCreationSummary(data, config) {
       direction: data.direction,
       threshold: data.threshold
     })}`,
-    "Price basis: last trade preferred, mid fallback",
+    `Price basis: recent ${config.aggregateBarMinutes}-minute aggregate VW`,
     `Poll frequency: every ${config.pollIntervalMinutes} minutes`
   ].join("\n");
 }
@@ -182,8 +187,8 @@ function formatHelp(config) {
     "/cancel - cancel the current setup or edit flow",
     "",
     `Scheduled checks run every ${config.pollIntervalMinutes} minutes.`,
-    `Last trades older than ${config.staleTradeMaxMinutes} minutes are treated as stale when timestamps are available.`,
-    "When last trade is missing or stale, the bot uses bid/ask mid if both bid and ask are positive."
+    `Alert prices use the latest ${config.aggregateBarMinutes}-minute aggregate VW in a ${config.aggregateLookbackMinutes}-minute lookback window.`,
+    `The aggregate window ends ${config.aggregateDelayMinutes} minutes behind the current time to match delayed data access.`
   ].join("\n");
 }
 
