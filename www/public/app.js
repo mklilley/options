@@ -372,7 +372,7 @@ function drawGrid(ctx, plot, optionAxis, underlyingAxis) {
 
     if (optionAxis) {
       ctx.textAlign = "right";
-      ctx.fillStyle = "#637066";
+      ctx.fillStyle = "#1b7f5f";
       ctx.fillText(money(valueForRatio(ratio, optionAxis)), plot.x - 8, y);
     }
 
