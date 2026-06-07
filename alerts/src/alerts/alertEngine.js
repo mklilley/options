@@ -71,6 +71,10 @@ class AlertEngine {
           const selectedPrice = selectAggregateVwPrice(aggregateBars);
 
           if (!selectedPrice.available) {
+            const lastAvailable = manual
+              ? await this.getLastAvailablePrice(alert, Date.parse(checkedAt))
+              : null;
+
             Object.assign(alert, markAlertUnchecked(alert, selectedPrice, checkedAt));
             changed = true;
 
@@ -78,13 +82,16 @@ class AlertEngine {
               alertId: alert.id,
               optionContract: alert.optionContract,
               reason: selectedPrice.reason,
-              aggregateRange: selectedPrice.aggregateRange
+              aggregateRange: selectedPrice.aggregateRange,
+              lastAvailablePrice: lastAvailable && lastAvailable.price ? lastAvailable.price.price : null
             }, "Alert skipped because no usable option price was available");
 
             summaries.push({
               alert,
               selectedPrice,
               aggregateBars,
+              lastAvailable,
+              checkedAt,
               status: "skipped",
               reason: selectedPrice.reason
             });
@@ -184,6 +191,45 @@ class AlertEngine {
       summaries,
       summaryText: formatCheckSummary(summaries)
     };
+  }
+
+  async getLastAvailablePrice(alert, checkedAtMs) {
+    try {
+      const lookbackMinutes = this.config.lastAvailableLookbackDays * 24 * 60;
+      const aggregateBars = await this.massiveClient.getRecentAggregateBars(alert.optionContract, {
+        nowMs: checkedAtMs,
+        delayMinutes: this.config.aggregateDelayMinutes,
+        lookbackMinutes,
+        barMinutes: this.config.aggregateBarMinutes
+      });
+      const price = selectAggregateVwPrice(aggregateBars);
+
+      if (!price.available) {
+        return {
+          price: null,
+          aggregateBars,
+          reason: price.reason
+        };
+      }
+
+      return {
+        price,
+        aggregateBars,
+        reason: null
+      };
+    } catch (error) {
+      this.logger.info({
+        alertId: alert.id,
+        optionContract: alert.optionContract,
+        error
+      }, "Could not fetch display-only last available aggregate price");
+
+      return {
+        price: null,
+        aggregateBars: null,
+        reason: error.message
+      };
+    }
   }
 }
 

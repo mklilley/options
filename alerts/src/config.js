@@ -35,7 +35,8 @@ const EnvSchema = z.object({
   STALE_TRADE_MAX_MINUTES: optionalNumber(30),
   AGGREGATE_LOOKBACK_MINUTES: optionalNumber(60),
   AGGREGATE_DELAY_MINUTES: optionalNumber(16),
-  AGGREGATE_BAR_MINUTES: optionalNumber(5)
+  AGGREGATE_BAR_MINUTES: optionalNumber(5),
+  LAST_AVAILABLE_LOOKBACK_DAYS: optionalNumber(7)
 });
 
 const SupportedPriceBasis = new Set(["last_trade", "last_trade_with_mid_fallback", "aggregate_vw"]);
@@ -86,7 +87,8 @@ function loadConfig() {
     staleTradeMaxMinutes: env.STALE_TRADE_MAX_MINUTES,
     aggregateLookbackMinutes: env.AGGREGATE_LOOKBACK_MINUTES,
     aggregateDelayMinutes: env.AGGREGATE_DELAY_MINUTES,
-    aggregateBarMinutes: env.AGGREGATE_BAR_MINUTES
+    aggregateBarMinutes: env.AGGREGATE_BAR_MINUTES,
+    lastAvailableLookbackDays: env.LAST_AVAILABLE_LOOKBACK_DAYS
   };
 }
 

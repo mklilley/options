@@ -52,6 +52,31 @@ function formatInteger(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
+function formatAge(fromValue, toValue) {
+  const from = Date.parse(fromValue);
+  const to = Date.parse(toValue);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return "unknown age";
+
+  const totalMinutes = Math.max(0, Math.round((to - from) / 60000));
+  if (totalMinutes < 60) {
+    return `${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 48) {
+    return minutes > 0
+      ? `${totalHours} hour${totalHours === 1 ? "" : "s"} ${minutes} minute${minutes === 1 ? "" : "s"}`
+      : `${totalHours} hour${totalHours === 1 ? "" : "s"}`;
+  }
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0
+    ? `${days} day${days === 1 ? "" : "s"} ${hours} hour${hours === 1 ? "" : "s"}`
+    : `${days} day${days === 1 ? "" : "s"}`;
+}
+
 function formatAlertCompact(alert) {
   const lines = [
     optionTitle(alert),
@@ -121,6 +146,7 @@ function formatCheckSummary(summaries) {
     if (summary.status === "skipped") {
       lines.push("Current: unavailable");
       lines.push(`Status: skipped, ${summary.reason || "no aggregate VW available"}`);
+      appendLastAvailablePrice(lines, summary);
       continue;
     }
 
@@ -140,6 +166,33 @@ function formatCheckSummary(summaries) {
   }
 
   return lines.join("\n");
+}
+
+function appendLastAvailablePrice(lines, summary) {
+  const lastAvailable = summary.lastAvailable;
+  const price = lastAvailable && lastAvailable.price;
+  if (!price || !price.available) return;
+
+  lines.push("");
+  lines.push("Last available:");
+  lines.push(`${formatMoney(price.price)} aggregate VW`);
+
+  if (price.aggregateBarAt) {
+    const checkedAt = summary.checkedAt || new Date().toISOString();
+    lines.push(`Bar: ${formatDateTime(price.aggregateBarAt)} (${formatAge(price.aggregateBarAt, checkedAt)} old)`);
+  }
+
+  if (Number.isFinite(price.aggregateBarClose)) {
+    lines.push(`Bar close: ${formatMoney(price.aggregateBarClose)}`);
+  }
+  if (Number.isFinite(price.aggregateBarVolume)) {
+    lines.push(`Volume: ${formatInteger(price.aggregateBarVolume)}`);
+  }
+  if (Number.isFinite(price.aggregateBarTransactions)) {
+    lines.push(`Trades: ${formatInteger(price.aggregateBarTransactions)}`);
+  }
+
+  lines.push("Note: stale price is display-only and was not used for alert evaluation.");
 }
 
 function statusLabel(status) {
@@ -188,7 +241,8 @@ function formatHelp(config) {
     "",
     `Scheduled checks run every ${config.pollIntervalMinutes} minutes.`,
     `Alert prices use the latest ${config.aggregateBarMinutes}-minute aggregate VW in a ${config.aggregateLookbackMinutes}-minute lookback window.`,
-    `The aggregate window ends ${config.aggregateDelayMinutes} minutes behind the current time to match delayed data access.`
+    `The aggregate window ends ${config.aggregateDelayMinutes} minutes behind the current time to match delayed data access.`,
+    `Manual checks show the last available aggregate VW from the prior ${config.lastAvailableLookbackDays} days when no recent bar is available, but stale prices do not trigger alerts.`
   ].join("\n");
 }
 

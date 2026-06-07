@@ -50,6 +50,7 @@ DEFAULT_PRICE_BASIS=aggregate_vw
 AGGREGATE_LOOKBACK_MINUTES=60
 AGGREGATE_DELAY_MINUTES=16
 AGGREGATE_BAR_MINUTES=5
+LAST_AVAILABLE_LOOKBACK_DAYS=7
 ```
 
 `TELEGRAM_ALLOWED_USER_IDS` is a comma-separated list, for example:
@@ -69,8 +70,11 @@ Aggregate pricing settings:
 - `AGGREGATE_LOOKBACK_MINUTES=60` checks the prior 60-minute window.
 - `AGGREGATE_DELAY_MINUTES=16` keeps requests behind the current time for delayed data access.
 - `AGGREGATE_BAR_MINUTES=5` requests 5-minute aggregate bars.
+- `LAST_AVAILABLE_LOOKBACK_DAYS=7` is used for manual-check display only when no recent bar exists.
 
 The bot picks the most recent returned aggregate bar in that window and uses its `vw` value. If no bar is returned, or the latest bar has no positive `vw`, the alert is skipped for that cycle.
+
+When a manual `/check` finds no recent bar, the bot also looks back up to `LAST_AVAILABLE_LOOKBACK_DAYS` and shows the last available aggregate VW as stale, display-only context. That stale value is not used to trigger alerts.
 
 ## Install
 
@@ -169,6 +173,8 @@ Every polling cycle:
 4. Change from entry is calculated.
 5. The condition is evaluated.
 6. If crossed and `triggerState` is `armed`, a Telegram alert is sent and the alert becomes `triggered`.
+
+For manual checks only, skipped alerts may also show the last available aggregate VW from the prior `LAST_AVAILABLE_LOOKBACK_DAYS`. This is informational and is not used for alert evaluation.
 
 Re-arming uses hysteresis:
 
