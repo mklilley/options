@@ -145,7 +145,7 @@ function formatCheckSummary(summaries) {
 
     if (summary.status === "skipped") {
       lines.push("Current: unavailable");
-      lines.push(`Status: skipped, ${summary.reason || "no aggregate VW available"}`);
+      lines.push(`Status: ${skippedStatusLabel(summary)}`);
       appendLastAvailablePrice(lines, summary);
       continue;
     }
@@ -166,6 +166,25 @@ function formatCheckSummary(summaries) {
   }
 
   return lines.join("\n");
+}
+
+function skippedStatusLabel(summary) {
+  const lastAvailable = summary.lastAvailable;
+  const lookbackDays = summary.lastAvailableLookbackDays;
+
+  if (lastAvailable && lastAvailable.price && lastAvailable.price.available) {
+    return "no recent option trades found";
+  }
+
+  if (Number.isFinite(lookbackDays)) {
+    return `no option trades found in the past ${lookbackDays} day${lookbackDays === 1 ? "" : "s"}`;
+  }
+
+  if (summary.reason === "latest aggregate bar has no positive VW price") {
+    return "recent option trade data did not include a usable average price";
+  }
+
+  return "no recent option trade data available";
 }
 
 function appendLastAvailablePrice(lines, summary) {

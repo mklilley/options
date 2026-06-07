@@ -92,6 +92,7 @@ class AlertEngine {
               aggregateBars,
               lastAvailable,
               checkedAt,
+              lastAvailableLookbackDays: this.config.lastAvailableLookbackDays,
               status: "skipped",
               reason: selectedPrice.reason
             });
